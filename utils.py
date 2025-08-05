@@ -10,7 +10,7 @@ import random
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
 from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet
 import seaborn as sns
-from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction
+from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction, reverse_channels_segmentation_reconstruction
 
 
 available_network = [
@@ -40,13 +40,15 @@ available_augmentation = [
     'None',
     'chr_augmentation',
     'reverse_channels',
-    'segmentation_reconstruction'
+    'segmentation_reconstruction',
+    'reverse_segmentation'
 ]
 
 augmentation_factory_methods = {
     'chr_augmentation': chr_augmentation,
     'reverse_channels': reverse_channels,
-    'segmentation_reconstruction': segmentation_reconstruction
+    'segmentation_reconstruction': segmentation_reconstruction,
+    'reverse_segmentation': reverse_channels_segmentation_reconstruction
 }
 
 available_paradigm = [
@@ -319,9 +321,9 @@ def plot_training_complete_autoencoder(fold_performance, name, folds):
 ########################################## CREATE DATALOADER #############################################
 def create_data_loader(train_tensor, val_tensor, batch_size, num_workers):
     train_loader = DataLoader(train_tensor, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-                              prefetch_factor=3, persistent_workers=True, pin_memory=True)
+                              prefetch_factor=3, persistent_workers=True)
     val_loader = DataLoader(val_tensor, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                            prefetch_factor=3, persistent_workers=True, pin_memory=True)
+                            prefetch_factor=3, persistent_workers=True)
     return train_loader, val_loader
 
 #################################### FIND BEST FOLD ############################################

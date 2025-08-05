@@ -44,9 +44,9 @@ def _train(data, labels, labels_subjects, saved_path):
         train_tensor, val_tensor = normalize_subset(train_subset, val_subset, normalization_factory_methods[args.normalization])
         train_loader, val_loader = create_data_loader(train_tensor, val_tensor, args.batch_size, args.num_workers)
 
-        y_train = np.array(torch.stack([train_subset[i][1] for i in range(len(train_subset))]))
+        y_train = torch.stack([train_subset[i][1] for i in range(len(train_subset))]).numpy()
         class_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train), dtype=torch.float32).to(args.device)
-        y_train_subjects = np.array(torch.stack([train_subset[i][2] for i in range(len(train_subset))]))
+        y_train_subjects = torch.stack([train_subset[i][2] for i in range(len(train_subset))]).numpy()
         subjects_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train_subjects), y=y_train_subjects), dtype=torch.float32).to(args.device)
         print(f"Class weights for this fold: {class_weights}")
         print(f"Subjects weights for this fold: {subjects_weights}")
