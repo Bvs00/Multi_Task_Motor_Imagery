@@ -13,7 +13,7 @@ import os
 from sklearn.utils import compute_class_weight
 
 
-def _train(data, labels, labels_subjects, saved_path):
+def _train(data, labels, labels_subjects):
     """    
     This function compute the normalization of the training data, save the normalization in saved_path 
     and create a 5 fold cross validation and train the model. 
@@ -21,7 +21,7 @@ def _train(data, labels, labels_subjects, saved_path):
     # Normalize Full Dataset
     mean, std, min_, max_ = normalization_factory_methods[args.normalization](data)
     
-    saved_normalizations(saved_path=f'{saved_path}/{args.name_model}', mean=mean, std=std, min_=min_, max_=max_)
+    saved_normalizations(saved_path=f'{args.saved_path}/{args.name_model}', mean=mean, std=std, min_=min_, max_=max_)
     
     fold_performance = []
     dataset = TensorDataset(data, labels, labels_subjects)
@@ -32,7 +32,7 @@ def _train(data, labels, labels_subjects, saved_path):
         fix_seeds(args.seed)
         model = (
             network_factory_methods[args.name_model](
-                model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
+                model_name_prefix=f'{args.saved_path}/{args.name_model}_seed{args.seed}',
                 num_classes=len(np.unique(labels)),
                 samples=data.shape[3], channels=data.shape[2])
         )
@@ -50,16 +50,17 @@ def _train(data, labels, labels_subjects, saved_path):
         subjects_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train_subjects), y=y_train_subjects), dtype=torch.float32).to(args.device)
         print(f"Class weights for this fold: {class_weights}")
         print(f"Subjects weights for this fold: {subjects_weights}")
-        train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, fold=fold, lr=args.lr, alpha=args.alpha,
-                    class_weight=class_weights, subjects_weights=subjects_weights, epochs=args.epochs, device=args.device, augmentation=args.augmentation, patience=args.patience)
+        train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
+                    fold=fold, lr=args.lr, alpha=args.alpha, class_weight=class_weights, subjects_weights=subjects_weights, 
+                    epochs=args.epochs, device=args.device, augmentation=args.augmentation, patience=args.patience, checkpoint_flag=args.checkpoint_flag)
 
-    with open(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
+    with open(f'{args.saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
         pass
 
     plot_training_complete(fold_performance,
-                           f'{saved_path}/{args.name_model}_seed{args.seed}', args.fold)
+                           f'{args.saved_path}/{args.name_model}_seed{args.seed}', args.fold)
 
-    with open(f'{saved_path}/{args.name_model}_seed{args.seed}_model_params.json', 'w') as fw:
+    with open(f'{args.saved_path}/{args.name_model}_seed{args.seed}_model_params.json', 'w') as fw:
         out_params = vars(args)
         out_params['num_classes'] = len(np.unique(labels))
         out_params['samples'] = data.shape[3]
@@ -85,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--normalization', type=str, choices=available_normalization, default='Z_Score_unique')
     parser.add_argument('--paradigm', type=str, choices=available_paradigm, default='Cross')
     parser.add_argument('--alpha', type=float, default=0.5)
+    parser.add_argument('-checkpoint_flag', action='store_true', default=True)
     args = parser.parse_args()
     
     print(f"DEVICE: {args.device}")
@@ -104,7 +106,7 @@ if __name__ == '__main__':
         labels_subjects = torch.cat(labels_train_subjects)
         fold_performance = []
         
-        _train(data, labels, labels_subjects, args.saved_path)
+        _train(data, labels, labels_subjects)
         
     print("FINISHED Training")
     

@@ -459,7 +459,7 @@ def validate_autoencoder(model, val_loader, criterion_tasks, criterion_reconstru
 
 
 def train_model(model, fold_performance, train_loader, val_loader, fold, class_weight, 
-                subjects_weights, lr, epochs, device, augmentation, patience, alpha):
+                subjects_weights, lr, epochs, device, augmentation, patience, alpha, checkpoint_flag):
     
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
     criterion_tasks = nn.CrossEntropyLoss(weight=class_weight)
@@ -476,8 +476,39 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, class_w
     list_loss_train, list_loss_train_tasks, list_loss_train_subjects = [], [], []
     list_loss_validation, list_loss_validation_tasks, list_loss_validation_subjects = [], [], []
     early_stopping_counter = 0
+    start_epoch = 0
+    skip_fold_flag = False
+    
+    if checkpoint_flag and os.path.exists(f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth"):
+        checkpoint = torch.load(f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth", weights_only=False)
+        
+        start_epoch = checkpoint['epoch']
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        best_val_loss = checkpoint['best_val_loss']
+        best_val_loss_tasks = checkpoint['best_val_loss_tasks']
+        best_val_loss_subjects = checkpoint['best_val_loss_subjects']
+        best_val_f1_tasks = checkpoint['best_val_f1_tasks']
+        best_val_f1_subjects = checkpoint['best_val_f1_subjects']
+        best_val_accuracy_tasks = checkpoint['best_val_accuracy_tasks']
+        best_val_accuracy_subjects = checkpoint['best_val_accuracy_subjects']
+        best_val_balanced_accuracy_tasks = checkpoint['best_val_balanced_accuracy_tasks']
+        best_val_balanced_accuracy_subjects = checkpoint['best_val_balanced_accuracy_subjects']
+        early_stopping_counter = checkpoint['early_stopping_counter']
+        list_loss_validation = checkpoint['list_loss_validation']
+        list_loss_validation_tasks = checkpoint['list_loss_validation_tasks']
+        list_loss_validation_subjects = checkpoint['list_loss_validation_subjects']
+        list_loss_train = checkpoint['list_loss_train']
+        list_loss_train_tasks = checkpoint['list_loss_train_tasks']
+        list_loss_train_subjects = checkpoint['list_loss_train_subjects']
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        if checkpoint['finish']:
+            skip_fold_flag = True
+            print('Skip Fold')
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs, 1):
+        if skip_fold_flag:
+            break
         model.train()
         running_loss = 0.0
         running_loss_tasks = 0.0
@@ -523,15 +554,35 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, class_w
                        f"{model.model_name_prefix}_best_model_fold{fold+1}.pth")
         else:
             early_stopping_counter += 1
+        
+        checkpoint = {
+            'epoch': epoch+1,
+            'optimizer': optimizer.state_dict(),
+            'best_val_loss': best_val_loss,
+            'best_val_loss_tasks': best_val_loss_tasks,
+            'best_val_loss_subjects': best_val_loss_subjects,
+            'best_val_f1_tasks': best_val_f1_tasks,
+            'best_val_f1_subjects': best_val_f1_subjects, 
+            'best_val_accuracy_tasks': best_val_accuracy_tasks, 
+            'best_val_accuracy_subjects': best_val_accuracy_subjects, 
+            'best_val_balanced_accuracy_tasks': best_val_balanced_accuracy_tasks, 
+            'best_val_balanced_accuracy_subjects': best_val_balanced_accuracy_subjects,
+            'early_stopping_counter': early_stopping_counter,
+            'list_loss_validation': list_loss_validation,
+            'list_loss_validation_tasks': list_loss_validation_tasks,
+            'list_loss_validation_subjects': list_loss_validation_subjects,
+            'list_loss_train': list_loss_train,
+            'list_loss_train_tasks': list_loss_train_tasks,
+            'list_loss_train_subjects': list_loss_train_subjects,
+            'model_state_dict': model.state_dict(),
+            'finish': True if (early_stopping_counter >= patience) or (epoch+1==epochs) else False
+        }
+        torch.save(checkpoint, f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth")
 
-        # print(f"Epoch {epoch+1}/{epochs}, TLoss: {running_loss/len(train_loader):.3f}, VLoss: {val_loss:.3f}, "
-        #       f"TLossTask: {running_loss_tasks/len(train_loader):.3f}, VLossTask: {val_loss_tasks:.3f},"
-        #      f"Validation F1 Score: {val_f1_tasks}, Validation Accuracy: {val_accuracy_tasks:.3f}, "
-        #      f"Early Stopping Counter: {early_stopping_counter}/{patience}")
-
-        if early_stopping_counter >= patience:
-            print(f"Early stopping at epoch {epoch + 1}")
-            break
+        print(f"Epoch {epoch+1}/{epochs}, TLoss: {running_loss/len(train_loader):.3f}, VLoss: {val_loss:.3f}, "
+              f"TLossTask: {running_loss_tasks/len(train_loader):.3f}, VLossTask: {val_loss_tasks:.3f},"
+             f"Validation F1 Score: {val_f1_tasks}, Validation Accuracy: {val_accuracy_tasks:.3f}, "
+             f"Early Stopping Counter: {early_stopping_counter}/{patience}")
 
         list_loss_validation.append(val_loss)
         list_loss_validation_tasks.append(val_loss_tasks)
@@ -539,11 +590,16 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, class_w
         list_loss_train.append(running_loss / len(train_loader))
         list_loss_train_tasks.append(running_loss_tasks / len(train_loader))
         list_loss_train_subjects.append(running_loss_subjects / len(train_loader))
-
-    # Save the loss values
-    plot_losses(list_loss_train, list_loss_train_tasks, list_loss_train_subjects, 
+        
+        plot_losses(list_loss_train, list_loss_train_tasks, list_loss_train_subjects, 
                 list_loss_validation, list_loss_validation_tasks, list_loss_validation_subjects, 
                 fold + 1, f"{model.model_name_prefix}")
+        
+        if early_stopping_counter >= patience:
+            print(f"Early stopping at epoch {epoch + 1}")
+            break
+    
+    # Save the loss values
     print("Min Train Loss: ", min(list_loss_train))
     print("Min Val Loss: ", min(list_loss_validation))
     fold_performance.append((best_val_loss, best_val_loss_tasks, best_val_loss_subjects,
