@@ -51,12 +51,18 @@ def segmentation_reconstruction(data, labels, subjects, num_segments=8, num_augm
     
     # creo i nuovi dati a partire da gruppi di campioni che appartengono allo stesso soggetto e alla stessa classe.
     for subject in type_subjects:
-        idx_subjects = torch.where(subjects==subject)[0]
+        idx_subjects = subjects==subject
+        if not idx_subjects.any():
+            continue
+        
         data_for_subject = data[idx_subjects]
         labels_for_subject = labels[idx_subjects]
-        
+    
         for label in type_labels:
-            idx_labels=torch.where(labels_for_subject == label)[0]
+            idx_labels = labels_for_subject==label
+            if not idx_labels.any():
+                continue
+            
             data_for_label = data_for_subject[idx_labels]
             n_samples = data_for_label.size(0)
             num_samples_for_classes = n_samples*num_augmentations

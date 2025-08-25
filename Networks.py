@@ -119,6 +119,7 @@ class PatchEmbeddingNet_Soft(nn.Module):
     def num_features_linear(self):
         x = torch.ones((1, 1, self.channels, self.samples))
         x = self.cnn_module(x)
+        x = self.task_branch(x)
         x = self.projection(x)
         return x.shape[-1]*x.shape[-2]
         
