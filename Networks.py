@@ -542,3 +542,67 @@ class CTNet(nn.Module):
         out = self.classification(self.flatten(features))
         out_subject = self.classification_subjects(self.flatten(features))
         return out, out_subject
+
+
+######## CTNet Soft-Sharing ###############
+
+class CTNet_Soft(nn.Module):
+    def __init__(self, heads=2, 
+                 emb_size=16,
+                 depth=6, 
+                 database_type='A', 
+                 eeg1_f1 = 8,
+                 eeg1_kernel_size = 64,
+                 eeg1_D = 2,
+                 eeg1_pooling_size1 = 8,
+                 eeg1_pooling_size2 = 8,
+                 eeg1_dropout_rate = 0.25,
+                 flatten_eeg1 = 240,
+                 num_classes = 2,
+                 channels = 3,
+                 model_name_prefix="CTNet_Soft",
+                 subjects=9,
+                 **kwargs):
+        super().__init__()
+        self.model_name_prefix = model_name_prefix
+        self.number_class, self.number_channel = num_classes, channels
+        self.emb_size = emb_size
+        self.flatten_eeg1 = flatten_eeg1
+        self.flatten = nn.Flatten()
+        self.subjects=subjects
+        print('self.number_channel', self.number_channel)
+        self.cnn = BranchEEGNetTransformer(heads, depth, emb_size, number_channel=self.number_channel,
+                                              f1 = eeg1_f1,
+                                              kernel_size = eeg1_kernel_size,
+                                              D = eeg1_D,
+                                              pooling_size1 = eeg1_pooling_size1,
+                                              pooling_size2 = eeg1_pooling_size2,
+                                              dropout_rate = eeg1_dropout_rate,
+                                              )
+        self.position = PositioinalEncoding_CTNet(emb_size, dropout=0.1)
+        self.trans = TransformerEncoder_CTNet(heads, depth, emb_size)
+        self.trans_subjects = TransformerEncoder_CTNet(heads, depth, emb_size)
+
+        self.flatten = nn.Flatten()
+        self.classification = ClassificationHead_CTNet(self.flatten_eeg1 , self.number_class) # FLATTEN_EEGNet + FLATTEN_cnn_module
+        self.classification_subjects = ClassificationHead_CTNet(self.flatten_eeg1 , self.subjects)
+        
+    def forward(self, x):
+        cnn = self.cnn(x)
+
+        #  positional embedding
+        cnn = cnn * math.sqrt(self.emb_size)
+        cnn = self.position(cnn)
+        
+        #task
+        trans = self.trans(cnn)
+        features = cnn+trans # residual connect
+        out = self.classification(self.flatten(features))
+        
+        
+        trans_subjects = self.trans_subjects(cnn)
+        features_subject = cnn + trans_subjects
+        out_subject = self.classification_subjects(self.flatten(features_subject))
+        return out, out_subject
+
+

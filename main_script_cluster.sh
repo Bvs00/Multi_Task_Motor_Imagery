@@ -6,9 +6,9 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
 #SBATCH --nodelist=gnode14
-#SBATCH --job-name=patch_soft
-#SBATCH --output=patch_soft.log
-#SBATCH --dependency=84944
+#SBATCH --job-name=ctnet_soft_segrec
+#SBATCH --output=ctnet_soft_segrec.log
+
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
@@ -34,9 +34,9 @@ if [ "$PRIME" == "1" ]; then
 elif [ "$PRIME" == "2" ]; then
   primes=(402 701 1001 1013 1207 1031 1339 1449 1527 1613 1743 1841 3222 5421)
 elif [ "$PRIME" == "3" ]; then
-  primes=(42 71 101 113 127 131 139 149 157 163 173 181 322 521 402 701 1001 1013 1207 1031 1339 1449 1527 1613 1743 1841 3222 5421)
+  primes=(42 71 101 113 127 131 139)
 elif [ "$PRIME" == "4" ]; then
-  primes=(163)
+  primes=(149 157 163 173 181 322 521)
 fi
 
 echo "${primes[@]}"
