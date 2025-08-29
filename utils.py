@@ -4,11 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import random
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
-from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet, PatchEmbeddingNet_Soft, CTNet_Soft
+from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet, PatchEmbeddingNet_Soft, CTNet_Soft, MSVTNet
 import seaborn as sns
 from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction, reverse_channels_segmentation_reconstruction
 
@@ -28,7 +29,8 @@ available_network = [
     'PatchEmbeddingNet',
     'PatchEmbeddingNet_Autoencoder',
     'PatchEmbeddingNet_Soft',
-    'CTNet_Soft'
+    'CTNet_Soft',
+    'MSVTNet'
 ]
 
 network_factory_methods = {
@@ -37,7 +39,8 @@ network_factory_methods = {
     'CTNet': CTNet,
     'EEGNet': EEGNet,
     'PatchEmbeddingNet_Soft': PatchEmbeddingNet_Soft,
-    'CTNet_Soft': CTNet_Soft
+    'CTNet_Soft': CTNet_Soft,
+    'MSVTNet': MSVTNet
 }
 
 available_augmentation = [
@@ -381,6 +384,20 @@ def find_max_f1(filename):
     return best_fold
 
 ################################# TRAIN AND VALIDATE ########################################
+class JointCrossEntoryLoss(nn.Module):
+    def __init__(self, lamd : float = 0.6) -> None:
+        super().__init__()
+        self.lamd = lamd
+
+    def forward(self, out, label):
+        end_out = out[0]
+        branch_out = out[1]
+        end_loss = F.nll_loss(end_out, label)
+        branch_loss = [F.nll_loss(out, label).unsqueeze(0) for out in branch_out]
+        branch_loss = torch.cat(branch_loss)
+        loss = self.lamd * end_loss + (1 - self.lamd) * torch.sum(branch_loss)
+        return loss
+
 
 def validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, device):
     model.eval()
@@ -403,6 +420,10 @@ def validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, devi
             val_loss_subjects += loss_subjects.detach().item()
 
             # Ottenere le predizioni
+            if isinstance(criterion_tasks, JointCrossEntoryLoss):
+                output_tasks = output_tasks[0]
+                output_subjects = output_subjects[0]
+            
             _, preds_tasks = torch.max(output_tasks, 1)
             all_preds_tasks.extend(preds_tasks.cpu().numpy())
             all_labels_tasks.extend(labels_batch.cpu().numpy())
@@ -462,12 +483,10 @@ def validate_autoencoder(model, val_loader, criterion_tasks, criterion_reconstru
     return avg_loss, avg_loss_tasks, avg_loss_reconstruction, f1_tasks.tolist(), accuracy_tasks, balanced_accuracy_tasks
 
 
-def train_model(model, fold_performance, train_loader, val_loader, fold, class_weight, 
-                subjects_weights, lr, epochs, device, augmentation, patience, alpha, checkpoint_flag):
+def train_model(model, fold_performance, train_loader, val_loader, fold, criterion_tasks, 
+                criterion_subjects, lr, epochs, device, augmentation, patience, alpha, checkpoint_flag):
     
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
-    criterion_tasks = nn.CrossEntropyLoss(weight=class_weight)
-    criterion_subjects = nn.CrossEntropyLoss(weight=subjects_weights)
     best_val_loss = float('inf')
     best_val_f1_tasks = 0.0
     best_val_f1_subjects = 0.0
@@ -584,7 +603,7 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, class_w
         torch.save(checkpoint, f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth")
 
         print(f"Epoch {epoch+1}/{epochs}, TLoss: {running_loss/len(train_loader):.3f}, VLoss: {val_loss:.3f}, "
-              f"TLossTask: {running_loss_tasks/len(train_loader):.3f}, VLossTask: {val_loss_tasks:.3f},"
+              f"TLossTask: {running_loss_tasks/len(train_loader):.3f}, VLossTask: {val_loss_tasks:.3f}, "
              f"Validation F1 Score: {val_f1_tasks}, Validation Accuracy: {val_accuracy_tasks:.3f}, "
              f"Early Stopping Counter: {early_stopping_counter}/{patience}")
 

@@ -1,12 +1,13 @@
 from utils import train_model, plot_training_complete, normalize_subset, create_tensors, create_tensors_subjects, fix_seeds,\
     create_data_loader, saved_normalizations,\
     available_network, network_factory_methods, available_augmentation, available_normalization, \
-    normalization_factory_methods, available_paradigm
+    normalization_factory_methods, available_paradigm, JointCrossEntoryLoss
 import sys
 import argparse
 import json
 import numpy as np
 import torch
+import torch.nn as nn
 from sklearn.model_selection import KFold
 from torch.utils.data import TensorDataset, Subset
 import os
@@ -50,8 +51,16 @@ def _train(data, labels, labels_subjects):
         subjects_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train_subjects), y=y_train_subjects), dtype=torch.float32).to(args.device)
         print(f"Class weights for this fold: {class_weights}")
         print(f"Subjects weights for this fold: {subjects_weights}")
+        
+        if args.name_model == "MSVTNet":
+            criterion_tasks = JointCrossEntoryLoss()
+            criterion_subjects = JointCrossEntoryLoss()
+        else:
+            criterion_tasks = nn.CrossEntropyLoss(weight=class_weights)
+            criterion_subjects = nn.CrossEntropyLoss(weight=subjects_weights)
+        
         train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
-                    fold=fold, lr=args.lr, alpha=args.alpha, class_weight=class_weights, subjects_weights=subjects_weights, 
+                    fold=fold, lr=args.lr, alpha=args.alpha, criterion_tasks=criterion_tasks, criterion_subjects=criterion_subjects, 
                     epochs=args.epochs, device=args.device, augmentation=args.augmentation, patience=args.patience, checkpoint_flag=args.checkpoint_flag)
 
     with open(f'{args.saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
