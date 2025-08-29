@@ -5,10 +5,10 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --nodelist=gnode14
-#SBATCH --job-name=ctnet_soft_segrec
-#SBATCH --output=ctnet_soft_segrec.log
-
+#SBATCH --nodelist=gnode03
+#SBATCH --job-name=ctnet_loso_segrec_025_2
+#SBATCH --output=ctnet_loso_segrec_025_2.log
+#SBATCH --dependency=86789
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
