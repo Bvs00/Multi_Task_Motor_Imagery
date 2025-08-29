@@ -64,7 +64,7 @@ def _train(data, labels, labels_subjects, saved_path):
             criterion_subjects = JointCrossEntoryLoss()
         else:
             criterion_tasks = nn.CrossEntropyLoss(weight=class_weights)
-            criterion_subjects = nn.CrossEntropyLoss(weight=subjects_weights)
+            criterion_subjects = nn.CrossEntropyLoss()
         
         train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
                     fold=fold, lr=args.lr, alpha=args.alpha, criterion_tasks=criterion_tasks, criterion_subjects=criterion_subjects, 
