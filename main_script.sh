@@ -40,6 +40,7 @@ for seed in "${primes[@]}"; do
           --augmentation "$aug" --num_workers 5 --normalization "$normalization" --paradigm "$paradigm" \
           --train_set "/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/train_2b_$bandpass.npz" \
           --alpha "$alpha" --patience 150 --batch_size 72
+  echo "Test seed: $seed"
   python -u test_motor_imagery.py --name_model "$network" --saved_path "$saved_path" --paradigm "$paradigm" \
           --test_set "/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_$bandpass.npz" \
           --seed "$seed" --alpha "$alpha"

@@ -233,6 +233,7 @@ def create_tensors_subjects(dataset_path):
     
     return data_tensor, labels_tensor, labels_subjects
 
+
 ######################## FIX SEED #################################
 def fix_seeds(seed=42):
     random.seed(seed)  # Per il modulo random standard di Python
@@ -543,7 +544,7 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, criteri
                 x_raw, label, subject = augmentation_factory_methods[augmentation](x_raw,label, subject)
             optimizer.zero_grad()
             output_tasks, output_subjects = model(x_raw)
-            
+
             loss_tasks = criterion_tasks(output_tasks, label)
             loss_subjects = criterion_subjects(output_subjects, subject)
             loss = ((1-alpha)*loss_tasks) + (alpha*loss_subjects)

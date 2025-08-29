@@ -1,6 +1,7 @@
 import sys
+import os
 from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, plot_confusion_matrix, \
-    load_normalizations, available_paradigm, available_network, network_factory_methods
+    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntoryLoss
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
 import json
@@ -25,12 +26,23 @@ if __name__ == '__main__':
     loss_list_tasks, f1_list_tasks, accuracy_list_tasks, balanced_accuracy_list_tasks = [], [], [], []
     loss_list_subjects, f1_list_subjects, accuracy_list_subjects, balanced_accuracy_list_subjects = [], [], [], []
     
+    if args.paradigm=='LOSO':
+        dir_path, filename = os.path.split(args.test_set)
+        new_filename = filename.replace("test", "train")
+        train_set_path = os.path.join(dir_path, new_filename)
+        data_train_tensors, labels_train_tensors, subjects_train_tensors = create_tensors_subjects(train_set_path)
+    
     for patient in range(len(data_test_tensors)):
         data, labels, subjects = data_test_tensors[patient], labels_test_tensors[patient], subjects_test_tensors[patient]
+        
+        if args.paradigm=='LOSO':
+            data_train, labels_train, subjects_train = data_train_tensors[patient], labels_train_tensors[patient], subjects_train_tensors[patient]
+            data, labels, subjects = torch.cat([data, data_train]), torch.cat([labels, labels_train]), torch.cat([subjects, subjects_train])
         
         saved_path = args.saved_path if args.paradigm=='Cross' else f'{args.saved_path}/Patient_{patient + 1}'
         
         mean, std, min_, max_ = load_normalizations(f'{saved_path}/{args.name_model}')
+        
         
         if mean != None:
             data = (data - mean)/std
@@ -50,8 +62,12 @@ if __name__ == '__main__':
         model.to(args.device)
         model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
 
-        criterion_tasks = nn.CrossEntropyLoss()
-        criterion_subjects = nn.CrossEntropyLoss()
+        if args.name_model == "MSVTNet":
+            criterion_tasks = JointCrossEntoryLoss()
+            criterion_subjects = JointCrossEntoryLoss()
+        else:
+            criterion_tasks = nn.CrossEntropyLoss()
+            criterion_subjects = nn.CrossEntropyLoss()
         
         # avg_loss, f1, confusion_matrix, accuracy, balanced_accuracy = validate(model, test_loader, criterion, args.device)
         (val_loss, val_loss_tasks, 

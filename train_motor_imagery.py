@@ -1,4 +1,4 @@
-from utils import train_model, plot_training_complete, normalize_subset, create_tensors, create_tensors_subjects, fix_seeds,\
+from utils import train_model, plot_training_complete, normalize_subset, create_tensors_subjects, fix_seeds,\
     create_data_loader, saved_normalizations,\
     available_network, network_factory_methods, available_augmentation, available_normalization, \
     normalization_factory_methods, available_paradigm, JointCrossEntoryLoss
@@ -13,8 +13,15 @@ from torch.utils.data import TensorDataset, Subset
 import os
 from sklearn.utils import compute_class_weight
 
+def _compute_loso(data_full, labels_full, subjects_full):
+    data = data_full.copy()
+    labels = labels_full.copy()
+    subjects = subjects_full.copy()
+    data.pop(patient), labels.pop(patient), subjects.pop(patient)
+    
+    return torch.cat(data), torch.cat(labels), torch.cat(subjects)
 
-def _train(data, labels, labels_subjects):
+def _train(data, labels, labels_subjects, saved_path):
     """    
     This function compute the normalization of the training data, save the normalization in saved_path 
     and create a 5 fold cross validation and train the model. 
@@ -22,7 +29,7 @@ def _train(data, labels, labels_subjects):
     # Normalize Full Dataset
     mean, std, min_, max_ = normalization_factory_methods[args.normalization](data)
     
-    saved_normalizations(saved_path=f'{args.saved_path}/{args.name_model}', mean=mean, std=std, min_=min_, max_=max_)
+    saved_normalizations(saved_path=f'{saved_path}/{args.name_model}', mean=mean, std=std, min_=min_, max_=max_)
     
     fold_performance = []
     dataset = TensorDataset(data, labels, labels_subjects)
@@ -33,7 +40,7 @@ def _train(data, labels, labels_subjects):
         fix_seeds(args.seed)
         model = (
             network_factory_methods[args.name_model](
-                model_name_prefix=f'{args.saved_path}/{args.name_model}_seed{args.seed}',
+                model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
                 num_classes=len(np.unique(labels)),
                 samples=data.shape[3], channels=data.shape[2])
         )
@@ -49,8 +56,8 @@ def _train(data, labels, labels_subjects):
         class_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train), dtype=torch.float32).to(args.device)
         y_train_subjects = torch.stack([train_subset[i][2] for i in range(len(train_subset))]).numpy()
         subjects_weights = torch.tensor(compute_class_weight(class_weight='balanced', classes=np.unique(y_train_subjects), y=y_train_subjects), dtype=torch.float32).to(args.device)
-        print(f"Class weights for this fold: {class_weights}")
-        print(f"Subjects weights for this fold: {subjects_weights}")
+        # print(f"Class weights for this fold: {class_weights}")
+        # print(f"Subjects weights for this fold: {subjects_weights}")
         
         if args.name_model == "MSVTNet":
             criterion_tasks = JointCrossEntoryLoss()
@@ -63,13 +70,13 @@ def _train(data, labels, labels_subjects):
                     fold=fold, lr=args.lr, alpha=args.alpha, criterion_tasks=criterion_tasks, criterion_subjects=criterion_subjects, 
                     epochs=args.epochs, device=args.device, augmentation=args.augmentation, patience=args.patience, checkpoint_flag=args.checkpoint_flag)
 
-    with open(f'{args.saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
+    with open(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
         pass
 
     plot_training_complete(fold_performance,
-                           f'{args.saved_path}/{args.name_model}_seed{args.seed}', args.fold)
+                           f'{saved_path}/{args.name_model}_seed{args.seed}', args.fold)
 
-    with open(f'{args.saved_path}/{args.name_model}_seed{args.seed}_model_params.json', 'w') as fw:
+    with open(f'{saved_path}/{args.name_model}_seed{args.seed}_model_params.json', 'w') as fw:
         out_params = vars(args)
         out_params['num_classes'] = len(np.unique(labels))
         out_params['samples'] = data.shape[3]
@@ -115,7 +122,32 @@ if __name__ == '__main__':
         labels_subjects = torch.cat(labels_train_subjects)
         fold_performance = []
         
-        _train(data, labels, labels_subjects)
+        _train(data, labels, labels_subjects, args.saved_path)
+        
+    elif args.paradigm=='LOSO':
+        
+        dir_path, filename = os.path.split(args.train_set)
+        new_filename = filename.replace("train", "test")
+        test_set_path = os.path.join(dir_path, new_filename)
+        data_test_tensors, labels_test_tensors, label_test_subjects = create_tensors_subjects(test_set_path)
+        
+        for patient in range(len(data_train_tensors)):
+            # train data
+            data_train, labels_train, subjects_train = _compute_loso(data_train_tensors, labels_train_tensors, labels_train_subjects)
+            
+            # test data
+            data_test, labels_test, subjects_test = _compute_loso(data_test_tensors, labels_test_tensors, label_test_subjects)
+            # full data to train model
+            data, labels, labels_subjects = torch.cat([data_train, data_test]), torch.cat([labels_train, labels_test]), torch.cat([subjects_train, subjects_test])
+            
+            print(f"Train {args.name_model}_seed{args.seed} for Patient {patient+1}")
+            
+            if not os.path.exists(args.saved_path+f'/Patient_{patient+1}'):
+                os.makedirs(args.saved_path+f'/Patient_{patient+1}')
+            saved_path = f'{args.saved_path}/Patient_{patient+1}'
+            fold_performance = []
+            
+            _train(data, labels, labels_subjects, saved_path)
         
     print("FINISHED Training")
     
