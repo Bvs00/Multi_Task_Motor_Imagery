@@ -1,6 +1,6 @@
 import sys
 from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, plot_confusion_matrix, \
-    load_normalizations, available_paradigm, available_network, network_factory_methods
+    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntoryLoss
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
 import json
@@ -50,8 +50,12 @@ if __name__ == '__main__':
         model.to(args.device)
         model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
 
-        criterion_tasks = nn.CrossEntropyLoss()
-        criterion_subjects = nn.CrossEntropyLoss()
+        if args.name_model=='MSVTNet':
+            criterion_tasks = JointCrossEntoryLoss()
+            criterion_subjects = JointCrossEntoryLoss()
+        else:
+            criterion_tasks = nn.CrossEntropyLoss()
+            criterion_subjects = nn.CrossEntropyLoss()
         
         # avg_loss, f1, confusion_matrix, accuracy, balanced_accuracy = validate(model, test_loader, criterion, args.device)
         (val_loss, val_loss_tasks, 
