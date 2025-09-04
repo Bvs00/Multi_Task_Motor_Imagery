@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import random
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
-from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet, PatchEmbeddingNet_Soft, CTNet_Soft, MSVTNet
+from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet, PatchEmbeddingNet_Soft, CTNet_Soft, MSVTNet, CSETNet
 import seaborn as sns
 from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction, reverse_channels_segmentation_reconstruction
 
@@ -30,7 +30,8 @@ available_network = [
     'PatchEmbeddingNet_Autoencoder',
     'PatchEmbeddingNet_Soft',
     'CTNet_Soft',
-    'MSVTNet'
+    'MSVTNet',
+    'CSETNet'
 ]
 
 network_factory_methods = {
@@ -40,7 +41,8 @@ network_factory_methods = {
     'EEGNet': EEGNet,
     'PatchEmbeddingNet_Soft': PatchEmbeddingNet_Soft,
     'CTNet_Soft': CTNet_Soft,
-    'MSVTNet': MSVTNet
+    'MSVTNet': MSVTNet,
+    'CSETNet': CSETNet
 }
 
 available_augmentation = [
