@@ -5,10 +5,10 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --nodelist=gnode03
+#SBATCH --nodelist=gnode11
 #SBATCH --job-name=ctnet_loso_segrec_025_2
 #SBATCH --output=ctnet_loso_segrec_025_2.log
-#SBATCH --dependency=86789
+#SBATCH --dependency=88357
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
@@ -37,6 +37,8 @@ elif [ "$PRIME" == "3" ]; then
   primes=(42 71 101 113 127 131 139)
 elif [ "$PRIME" == "4" ]; then
   primes=(149 157 163 173 181 322 521)
+elif [ "$PRIME" == "5" ]; then
+  primes=(139)
 fi
 
 echo "${primes[@]}"
