@@ -1078,12 +1078,10 @@ class MSVTSENet(nn.Module):
         assert len(F) == len(C1), 'The length of F and C1 should be equal.'
 
         self.mstsconv = nn.ModuleList([
-            nn.Sequential(
-                TSConv(self.nCh, F[b], C1[b], C2, D, P1, P2, Pc),
-                Rearrange('b d 1 t -> b t d')   # b x 18 x 1 x 17 e le feature maps diventano le nostra informazioni per ogni token (la lista di token diventa 17)
-            )
+            TSConv(self.nCh, F[b], C1[b], C2, D, P1, P2, Pc)
             for b in range(len(F))
         ])
+        self.rearrange = Rearrange('b d 1 t -> b t d')   # b x 18 x 1 x 17 e le feature maps diventano le nostra informazioni per ogni token (la lista di token diventa 17)
         self.se_layer = SENet(D*sum(F))
         branch_linear_in = self._forward_flatten(cat=False)
         
@@ -1106,6 +1104,7 @@ class MSVTSENet(nn.Module):
     def _forward_mstsconv(self, cat = True):
         x = torch.randn(1, 1, self.nCh, self.nTime)
         x = [tsconv(x) for tsconv in self.mstsconv]
+        x = [self.rearrange(x_i) for x_i in x]
         if cat:
             x = torch.cat(x, dim=2)
         return x
@@ -1121,14 +1120,15 @@ class MSVTSENet(nn.Module):
 
     def forward(self, x):
         x = [tsconv(x) for tsconv in self.mstsconv]
-        bx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head_task)]
-        cx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head_subject)]
-        x = torch.cat(x, dim=2)
+        branch_task = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head_task)]
+        branch_subject = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head_subject)]
+        x = torch.cat(x, dim=1)
         x = self.se_layer(x)
+        x = self.rearrange(x)
         x = self.transformer(x)
         output_task = self.last_head_task(x)
         output_subject = self.last_head_subject(x)
         if self.b_preds:
-            return [output_task, bx], [output_subject, cx]
+            return [output_task, branch_task], [output_subject, branch_subject]
         else:
             return output_task, output_subject
