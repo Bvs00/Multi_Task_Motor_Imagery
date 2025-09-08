@@ -774,10 +774,12 @@ class PatchSEEmbedding(nn.Module):
         f2 = D*f1
         self.cnn_module = nn.Sequential(
             # temporal conv kernel size 64=0.25fs
-            nn.Conv2d(1, f1, (1, kernel_size), (1, 1), padding='same', bias=False), # [batch, 22, 1000] 
+            nn.Conv2d(1, f1, (1, kernel_size), (1, 1), padding='same', bias=False), # [batch, 22, 1000]
+            SENet(f1), 
             nn.BatchNorm2d(f1),
             # channel depth-wise conv
             nn.Conv2d(f1, f2, (number_channel, 1), (1, 1), groups=f1, padding='valid', bias=False), # 
+            SENet(f2),
             nn.BatchNorm2d(f2),
             nn.ELU(),
             # average pooling 1
