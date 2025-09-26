@@ -19,6 +19,10 @@ def _compute_loso(data_full, labels_full, subjects_full):
     subjects = subjects_full.copy()
     data.pop(patient), labels.pop(patient), subjects.pop(patient)
     
+    for t in range(len(subjects)):
+        if torch.all(subjects[t]>patient):
+            subjects[t] -= 1
+    
     return torch.cat(data), torch.cat(labels), torch.cat(subjects)
 
 def _train(data, labels, labels_subjects, saved_path):
