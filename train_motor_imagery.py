@@ -12,11 +12,12 @@ from sklearn.model_selection import KFold
 from torch.utils.data import TensorDataset, Subset
 import os
 from sklearn.utils import compute_class_weight
+import copy
 
-def _compute_loso(data_full, labels_full, subjects_full):
-    data = data_full.copy()
-    labels = labels_full.copy()
-    subjects = subjects_full.copy()
+def _compute_loso(data_full, labels_full, subjects_full, patient):
+    data = copy.deepcopy(data_full)
+    labels = copy.deepcopy(labels_full)
+    subjects = copy.deepcopy(subjects_full)
     data.pop(patient), labels.pop(patient), subjects.pop(patient)
     
     for t in range(len(subjects)):
@@ -45,7 +46,7 @@ def _train(data, labels, labels_subjects, saved_path):
         model = (
             network_factory_methods[args.name_model](
                 model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                num_classes=len(np.unique(labels)),
+                num_classes=len(np.unique(labels)), subjects=len(np.unique(labels_subjects)),
                 samples=data.shape[3], channels=data.shape[2])
         )
         model.to(args.device)
@@ -68,7 +69,7 @@ def _train(data, labels, labels_subjects, saved_path):
             criterion_subjects = JointCrossEntoryLoss()
         else:
             criterion_tasks = nn.CrossEntropyLoss(weight=class_weights)
-            criterion_subjects = nn.CrossEntropyLoss()
+            criterion_subjects = nn.CrossEntropyLoss(weight=subjects_weights)
         
         train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
                     fold=fold, lr=args.lr, alpha=args.alpha, criterion_tasks=criterion_tasks, criterion_subjects=criterion_subjects, 
@@ -137,10 +138,10 @@ if __name__ == '__main__':
         
         for patient in range(len(data_train_tensors)):
             # train data
-            data_train, labels_train, subjects_train = _compute_loso(data_train_tensors, labels_train_tensors, labels_train_subjects)
+            data_train, labels_train, subjects_train = _compute_loso(data_train_tensors, labels_train_tensors, labels_train_subjects, patient)
             
             # test data
-            data_test, labels_test, subjects_test = _compute_loso(data_test_tensors, labels_test_tensors, label_test_subjects)
+            data_test, labels_test, subjects_test = _compute_loso(data_test_tensors, labels_test_tensors, label_test_subjects, patient)
             # full data to train model
             data, labels, labels_subjects = torch.cat([data_train, data_test]), torch.cat([labels_train, labels_test]), torch.cat([subjects_train, subjects_test])
             
