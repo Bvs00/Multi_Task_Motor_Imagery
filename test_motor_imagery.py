@@ -1,6 +1,6 @@
 import sys
 import os
-from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, plot_confusion_matrix, \
+from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, validate_loso, \
     load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntoryLoss
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
@@ -25,12 +25,14 @@ if __name__ == '__main__':
     loss_list, final_results = [], []
     loss_list_tasks, f1_list_tasks, accuracy_list_tasks, balanced_accuracy_list_tasks = [], [], [], []
     loss_list_subjects, f1_list_subjects, accuracy_list_subjects, balanced_accuracy_list_subjects = [], [], [], []
+    num_subjects=9
     
     if args.paradigm=='LOSO':
         dir_path, filename = os.path.split(args.test_set)
         new_filename = filename.replace("test", "train")
         train_set_path = os.path.join(dir_path, new_filename)
         data_train_tensors, labels_train_tensors, subjects_train_tensors = create_tensors_subjects(train_set_path)
+        num_subjects=8
     
     for patient in range(len(data_test_tensors)):
         data, labels, subjects = data_test_tensors[patient], labels_test_tensors[patient], subjects_test_tensors[patient]
@@ -56,7 +58,7 @@ if __name__ == '__main__':
 
         model = (
             network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                num_classes=len(np.unique(labels)),
+                num_classes=len(np.unique(labels)), subjects=num_subjects,
                 samples=data.shape[3], channels=data.shape[2])
         )
         model.to(args.device)
@@ -69,33 +71,42 @@ if __name__ == '__main__':
             criterion_tasks = nn.CrossEntropyLoss()
             criterion_subjects = nn.CrossEntropyLoss()
         
-        # avg_loss, f1, confusion_matrix, accuracy, balanced_accuracy = validate(model, test_loader, criterion, args.device)
-        (val_loss, val_loss_tasks, 
-        val_loss_subjects, val_f1_tasks, 
-        val_f1_subjects, val_accuracy_tasks, 
-        val_accuracy_subjects, val_balanced_accuracy_tasks, 
-        val_balanced_accuracy_subjects) = validate(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
-        
-        # plot_confusion_matrix(confusion_matrix, ['Background', 'Left Hand', 'Right Hand'] if confusion_matrix.shape[0]==3 else ['Left Hand', 'Right Hand'], best_fold,
-        #                     f'{saved_path}/{args.name_model}_seed{args.seed}_test', balanced_accuracy)
+        if args.paradigm == 'LOSO':
+            (val_f1_tasks, 
+            val_accuracy_tasks, 
+            val_balanced_accuracy_tasks, 
+            subjects_prediction) = validate_loso(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
+            median_subject_prediciton = np.median(subjects_prediction)
+            print(f"The median value of patient {patient+1} is {median_subject_prediciton}")
+            f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks), balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
+            final_results.append({'Patient': patient+1, 
+                                'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks, 
+                                'Median Subject Prediction': median_subject_prediciton})
+        else:
+            (val_loss, val_loss_tasks, 
+            val_loss_subjects, val_f1_tasks, 
+            val_f1_subjects, val_accuracy_tasks, 
+            val_accuracy_subjects, val_balanced_accuracy_tasks, 
+            val_balanced_accuracy_subjects) = validate(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
 
-        # if args.paradigm == 'Single' or args.paradigm == 'LOSO':
-        #     with open(f'{saved_path}/{args.name_model}_seed{args.seed}_test_results.json', 'w') as f:
-        #         json.dump({'average_loss': avg_loss, 'f1_score': f1, 'accuracy': accuracy, 'balanced_accuracy': balanced_accuracy}, f, indent=4)
+            loss_list.append(val_loss), loss_list_tasks.append(val_loss_tasks), loss_list_subjects.append(val_loss_subjects)
+            f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks), balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
+            f1_list_subjects.append(val_f1_subjects), accuracy_list_subjects.append(val_accuracy_subjects), balanced_accuracy_list_subjects.append(val_balanced_accuracy_subjects)
 
-        loss_list.append(val_loss), loss_list_tasks.append(val_loss_tasks), loss_list_subjects.append(val_loss_subjects)
-        f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks), balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
-        f1_list_subjects.append(val_f1_subjects), accuracy_list_subjects.append(val_accuracy_subjects), balanced_accuracy_list_subjects.append(val_balanced_accuracy_subjects)
-
-        final_results.append({'Patient': patient+1, 'Loss': val_loss, 
-                              'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks,
-                              'Accuracy Subjects': val_accuracy_subjects, 'Balanced Accuracy Subjects': val_balanced_accuracy_subjects})
+            final_results.append({'Patient': patient+1, 'Loss': val_loss, 
+                                'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks,
+                                'Accuracy Subjects': val_accuracy_subjects, 'Balanced Accuracy Subjects': val_balanced_accuracy_subjects})
     
-    final_results.append(
-        {f"Average": {"Loss": np.mean(loss_list), 
-                      "F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks),
-                      "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects)}}
-    )
+    if args.paradigm == 'LOSO':
+        final_results.append(
+        {f"Average": {"F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), 
+                      "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks)}})
+    else:
+        final_results.append(
+            {f"Average": {"Loss": np.mean(loss_list), 
+                        "F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks),
+                        "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects)}}
+        )
 
     with open(f'{args.saved_path}/Final_results_{args.name_model}_seed{args.seed}.json', 'w') as f:
         json.dump(final_results, f, indent=4)

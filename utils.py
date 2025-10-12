@@ -453,6 +453,38 @@ def validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, devi
         # conf_matrix = confusion_matrix(all_labels, all_preds)
     return avg_loss, avg_loss_tasks, avg_loss_subjects, f1_tasks.tolist(), f1_subjects.tolist(), accuracy_tasks, accuracy_subjects, balanced_accuracy_tasks, balanced_accuracy_subjects
 
+def validate_loso(model, val_loader, criterion_tasks, criterion_subjects, alpha, device):
+    model.eval()
+    all_preds_tasks = []
+    all_preds_subjects = []
+    all_labels_tasks = []
+    all_labels_subjects = []
+    with torch.no_grad():
+        for x_raw_batch, labels_batch, subjects_batch in val_loader:
+            x_raw_batch, labels_batch, subjects_batch = x_raw_batch.to(device), labels_batch.to(device), subjects_batch.to(device)
+            output_tasks, output_subjects = model(x_raw_batch)
+
+            # Ottenere le predizioni
+            if isinstance(criterion_tasks, JointCrossEntoryLoss):
+                output_tasks = output_tasks[0]
+                output_subjects = output_subjects[0]
+            
+            _, preds_tasks = torch.max(output_tasks, 1)
+            all_preds_tasks.extend(preds_tasks.cpu().numpy())
+            all_labels_tasks.extend(labels_batch.cpu().numpy())
+            # Ottenere le predizioni sui soggetti
+            _, preds_subjects = torch.max(output_subjects, 1)
+            all_preds_subjects.extend(preds_subjects.cpu().numpy())
+        
+        f1_tasks = f1_score(all_labels_tasks, all_preds_tasks, average=None)
+        accuracy_tasks = accuracy_score(all_labels_tasks, all_preds_tasks)
+        balanced_accuracy_tasks = balanced_accuracy_score(all_labels_tasks, all_preds_tasks)
+        # conf_matrix = confusion_matrix(all_labels, all_preds)
+    return f1_tasks.tolist(), accuracy_tasks, balanced_accuracy_tasks, all_preds_subjects
+
+    
+
+
 def validate_autoencoder(model, val_loader, criterion_tasks, criterion_reconstruction, alpha, device, masked,test=False):
     model.eval()
     val_loss = 0.0
