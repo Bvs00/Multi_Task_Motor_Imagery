@@ -311,6 +311,26 @@ def plot_training_complete(fold_performance, name, folds):
         print(f'Average Loss: {avg_loss:.3f}, Average F1: {avg_f1}')
         with open(f'{name}_validation_log.txt', 'a') as f:
             f.write(f'Average Loss: {avg_loss:.3f}, Average F1: {avg_f1}, Average Accuracy: {avg_accuracy:.3f}\n')
+            
+def plot_training_complete_loso(fold_performance, name, folds):
+    print('Training complete')
+    for fold, performance in enumerate(fold_performance):
+        # print(f'Fold {fold + 1} - Loss: {performance[0]:.4f}, F1: {performance[1]}, Confusion Matrix: '
+        #       f'{performance[2]}, Accuracy: {performance[3]:.4f}, Balanced Accuracy: {performance[4]:.4f}\n')
+        with open(f'{name}_validation_log.txt', 'a') as f:
+            f.write(f'Fold {fold + 1} - Loss: {performance[0]:.3f}, F1 Tasks: {performance[1]}, '
+                    f'Accuracy Tasks: {performance[3]:.3f}, '
+                    f'Balanced Accuracy Tasks: {performance[4]:.3f}\n')
+    avg_loss = np.mean([performance[0] for performance in fold_performance])
+    avg_f1 = np.mean([performance[3] for performance in fold_performance])
+    if folds > 1:
+        accuracy = 0.0
+        for performance in fold_performance:
+            accuracy += performance[4]
+        avg_accuracy = accuracy / folds
+        print(f'Average Loss: {avg_loss:.3f}, Average F1: {avg_f1}')
+        with open(f'{name}_validation_log.txt', 'a') as f:
+            f.write(f'Average Loss: {avg_loss:.3f}, Average F1: {avg_f1}, Average Accuracy: {avg_accuracy:.3f}\n')
 
 def plot_training_complete_autoencoder(fold_performance, name, folds):
     print('Training complete')
@@ -392,7 +412,7 @@ def find_max_f1(filename):
     return best_fold
 
 ################################# TRAIN AND VALIDATE ########################################
-class JointCrossEntoryLoss(nn.Module):
+class JointCrossEntropyLoss(nn.Module):
     def __init__(self, lamd : float = 0.6) -> None:
         super().__init__()
         self.lamd = lamd
@@ -428,7 +448,7 @@ def validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, devi
             val_loss_subjects += loss_subjects.detach().item()
 
             # Ottenere le predizioni
-            if isinstance(criterion_tasks, JointCrossEntoryLoss):
+            if isinstance(criterion_tasks, JointCrossEntropyLoss):
                 output_tasks = output_tasks[0]
                 output_subjects = output_subjects[0]
             
@@ -465,7 +485,7 @@ def validate_loso(model, val_loader, criterion_tasks, criterion_subjects, alpha,
             output_tasks, output_subjects = model(x_raw_batch)
 
             # Ottenere le predizioni
-            if isinstance(criterion_tasks, JointCrossEntoryLoss):
+            if isinstance(criterion_tasks, JointCrossEntropyLoss):
                 output_tasks = output_tasks[0]
                 output_subjects = output_subjects[0]
             
@@ -670,7 +690,133 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, criteri
                              best_val_accuracy_tasks, best_val_accuracy_subjects,
                              best_val_balanced_accuracy_tasks, best_val_balanced_accuracy_subjects))
     
-######### AUTOENCODER #####
+    
+def train_fine_tuning_model(model, fold_performance, train_loader, val_loader, fold, criterion,
+                lr, epochs, device, augmentation, patience, checkpoint_flag):
+    
+    optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
+    best_val_loss = float('inf')
+    best_val_f1 = 0.0
+    best_val_conf_matrix = np.zeros(shape=(2, 2))
+    best_val_accuracy = 0.0
+    best_val_balanced_accuracy = 0.0
+    list_loss_train = []
+    list_loss_validation = []
+    early_stopping_counter = 0
+    start_epoch = 0
+    skip_fold_flag = False
+    
+    if checkpoint_flag and os.path.exists(f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth"):
+        checkpoint = torch.load(f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth", weights_only=False)
+        
+        start_epoch = checkpoint['epoch']
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        best_val_loss = checkpoint['best_val_loss']
+        best_val_f1 = checkpoint['best_val_f1']
+        best_val_conf_matrix = checkpoint['best_val_conf_matrix']
+        best_val_accuracy = checkpoint['best_val_accuracy']
+        best_val_balanced_accuracy = checkpoint['best_val_balanced_accuracy']
+        early_stopping_counter = checkpoint['early_stopping_counter']
+        list_loss_validation = checkpoint['list_loss_validation']
+        list_loss_train = checkpoint['list_loss_train']
+        model.load_state_dict(checkpoint['model_state_dict'])
+        skip_fold_flag = checkpoint['finish']
+    
+    for epoch in range(start_epoch, epochs, 1):
+        if skip_fold_flag:
+            print('Skip Fold')
+            break
+        model.train()
+        running_loss = 0.0
+
+        for x_raw, label, label_subject in train_loader:
+            x_raw, label = x_raw.to(device), label.to(device)
+            if augmentation is not None:
+                x_raw, label, _ = augmentation_factory_methods[augmentation](x_raw,label,label_subject)
+            optimizer.zero_grad()
+            outputs, _ = model(x_raw)
+            loss = criterion(outputs, label)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.detach().item()
+
+        # calcolare la loss di validation
+        val_loss, val_f1, val_conf_matrix, val_accuracy, val_balanced_accuracy = validate_fine_tuning(model, val_loader, criterion, device)
+
+        # Early Stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_val_f1 = val_f1
+            best_val_conf_matrix = val_conf_matrix
+            best_val_accuracy = val_accuracy
+            best_val_balanced_accuracy = val_balanced_accuracy
+            early_stopping_counter = 0
+            torch.save(model.state_dict(),
+                       f"{model.model_name_prefix}_best_model_fold{fold+1}.pth")
+        else:
+            early_stopping_counter += 1
+
+        print(f"Epoch {epoch+1}/{epochs}, Training Loss: {running_loss/len(train_loader):.4f}, Validation Loss: {val_loss:.4f}, "
+             f"Validation F1 Score: {val_f1}, Validation Accuracy: {val_accuracy:.4f}, "
+             f"Early Stopping Counter: {early_stopping_counter}/{patience}")
+        
+        checkpoint = {
+            'epoch': epoch+1,
+            'optimizer': optimizer.state_dict(),
+            'best_val_loss': best_val_loss,
+            'best_val_f1': best_val_f1,
+            'best_val_conf_matrix': best_val_conf_matrix,
+            'best_val_accuracy': best_val_accuracy,
+            'best_val_balanced_accuracy': best_val_balanced_accuracy,
+            'early_stopping_counter': early_stopping_counter,
+            'list_loss_validation': list_loss_validation,
+            'list_loss_train': list_loss_train,
+            'model_state_dict': model.state_dict(),
+            'finish': True if (early_stopping_counter >= patience) or (epoch+1==epochs) else False
+        }
+        torch.save(checkpoint, f"{model.model_name_prefix}_checkpoint_fold{fold+1}.pth")
+
+        list_loss_validation.append(val_loss)
+        list_loss_train.append(running_loss / len(train_loader))
+        
+        # Save the loss values
+        plot_losses(list_loss_train, list_loss_train, list_loss_train, list_loss_validation, list_loss_validation, list_loss_validation, fold + 1, f"{model.model_name_prefix}")
+        
+        if early_stopping_counter >= patience:
+            print(f"Early stopping at epoch {epoch + 1}")
+            break
+
+    print("Min Train Loss: ", min(list_loss_train))
+    print("Min Val Loss: ", min(list_loss_validation))
+    fold_performance.append((best_val_loss, best_val_f1, best_val_conf_matrix, best_val_accuracy, best_val_balanced_accuracy))
+
+def validate_fine_tuning(model, val_loader, criterion, device):
+    model.eval()
+    val_loss = 0.0
+    all_preds = []
+    all_labels = []
+    with torch.no_grad():
+        for x_raw_batch, labels_batch, _ in val_loader:
+            x_raw_batch, labels_batch = x_raw_batch.to(device), labels_batch.to(device)
+            outputs, _ = model(x_raw_batch)
+            loss = criterion(outputs, labels_batch)
+            val_loss += loss.detach().item()
+
+            # Ottenere le predizioni
+            if isinstance(criterion, JointCrossEntropyLoss):
+                outputs=outputs[0]
+            _, preds = torch.max(outputs, 1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels_batch.cpu().numpy())
+
+        avg_loss = val_loss / len(val_loader)
+        f1 = f1_score(all_labels, all_preds, average=None)
+        accuracy = accuracy_score(all_labels, all_preds)
+        balanced_accuracy = balanced_accuracy_score(all_labels, all_preds)
+        conf_matrix = confusion_matrix(all_labels, all_preds)
+    return avg_loss, f1.tolist(), conf_matrix, accuracy, balanced_accuracy
+
+############################################ AUTOENCODER ##################################################
 def zero_segments(x, high=400):
     B,_,C,T = x.shape
     signal = x.clone()

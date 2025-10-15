@@ -1,7 +1,7 @@
 import sys
 import os
-from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, validate_loso, \
-    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntoryLoss
+from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, validate_loso, validate_fine_tuning, \
+    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntropyLoss
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
 import json
@@ -26,6 +26,9 @@ if __name__ == '__main__':
     loss_list_tasks, f1_list_tasks, accuracy_list_tasks, balanced_accuracy_list_tasks = [], [], [], []
     loss_list_subjects, f1_list_subjects, accuracy_list_subjects, balanced_accuracy_list_subjects = [], [], [], []
     num_subjects=9
+    
+    if args.paradigm=='Single':
+        num_subjects=8
     
     if args.paradigm=='LOSO':
         dir_path, filename = os.path.split(args.test_set)
@@ -65,8 +68,8 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
 
         if args.name_model == "MSVTNet" or args.name_model == "MSVTSENet":
-            criterion_tasks = JointCrossEntoryLoss()
-            criterion_subjects = JointCrossEntoryLoss()
+            criterion_tasks = JointCrossEntropyLoss()
+            criterion_subjects = JointCrossEntropyLoss()
         else:
             criterion_tasks = nn.CrossEntropyLoss()
             criterion_subjects = nn.CrossEntropyLoss()
@@ -82,6 +85,19 @@ if __name__ == '__main__':
             final_results.append({'Patient': patient+1, 
                                 'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks, 
                                 'Median Subject Prediction': median_subject_prediciton})
+        elif args.paradigm=='Single':
+            (val_loss, 
+            val_f1_tasks, 
+            val_conf_matrix, 
+            val_accuracy_tasks, 
+            val_balanced_accuracy_tasks) = validate_fine_tuning(model, test_loader, criterion_tasks, args.device)
+            loss_list.append(val_loss), f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks)
+            balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
+            
+            final_results.append({'Patient': patient+1, 'Loss': val_loss, 
+                                'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 
+                                'Balanced Accuracy Tasks': val_balanced_accuracy_tasks})
+
         else:
             (val_loss, val_loss_tasks, 
             val_loss_subjects, val_f1_tasks, 
@@ -97,7 +113,7 @@ if __name__ == '__main__':
                                 'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks,
                                 'Accuracy Subjects': val_accuracy_subjects, 'Balanced Accuracy Subjects': val_balanced_accuracy_subjects})
     
-    if args.paradigm == 'LOSO':
+    if args.paradigm == 'LOSO' or args.paradigm == 'Single':
         final_results.append(
         {f"Average": {"F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), 
                       "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks)}})
