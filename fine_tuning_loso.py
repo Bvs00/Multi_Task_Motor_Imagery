@@ -60,6 +60,14 @@ def _train(data, labels, saved_path, saved_path_loso):
         else:
             criterion_tasks = nn.CrossEntropyLoss(weight=class_weights)
         
+        if args.linear_probing:
+            print('linear probing activated')
+            for param in pretrained_model.parameters():
+                param.requires_grad = False
+                
+            for param in pretrained_model.last_head_task.parameters():
+                param.requires_grad = True
+        
         train_fine_tuning_model(model=pretrained_model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
                     fold=fold, lr=args.lr, criterion=criterion_tasks, epochs=args.epochs, device=args.device, 
                     augmentation=args.augmentation, patience=args.patience, checkpoint_flag=args.checkpoint_flag)
@@ -95,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=5)
     parser.add_argument('--augmentation', type=str, choices=available_augmentation, default=None)
     parser.add_argument('--normalization', type=str, choices=available_normalization, default='Z_Score_unique')
+    parser.add_argument('--linear_probing', type=str, default="False")
     parser.add_argument('-checkpoint_flag', action='store_true', default=True)
     args = parser.parse_args()
     
@@ -102,6 +111,11 @@ if __name__ == '__main__':
     if args.augmentation == "None":
         args.augmentation= None
     
+    if args.linear_probing == "False":
+        args.linear_probing = False
+    elif args.linear_probing == "True":
+        args.linear_probing = True
+    print(args.linear_probing)
     if not os.path.exists(args.saved_path):
         os.makedirs(args.saved_path)
     
