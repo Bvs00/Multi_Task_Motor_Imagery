@@ -10,6 +10,7 @@ if __name__ == "__main__":
     parser.add_argument('--network', type=str, default='PatchEmbeddingNet_Autoencoder')
     parser.add_argument('--path', type=str, default='Results_400/Results_Percentile_unique/Results_PatchEmbeddingNet_Autoencoder')
     parser.add_argument('-full_seeds', action='store_true')
+    parser.add_argument('-fine_tuning', action='store_true')
     args = parser.parse_args()
 
     path = args.path
@@ -31,7 +32,8 @@ if __name__ == "__main__":
         with open(file_path, 'r') as f:
             data = json.load(f)
             balanced_accuracies = [round(data[i]['Balanced Accuracy Tasks'], 2) for i in range(9)]
-            balanced_accuracies_subjects = [round(data[i]['Balanced Accuracy Subjects'], 2) for i in range(9)]
+            if not args.fine_tuning:
+                balanced_accuracies_subjects = [round(data[i]['Balanced Accuracy Subjects'], 2) for i in range(9)]
             
             for i in range(9):
                 key = f'Patient{i+1}'
@@ -48,23 +50,28 @@ if __name__ == "__main__":
             
             # Aggiungere una nuova riga al DataFrame
             dataframe_balanced.loc[count] = [seed] + balanced_accuracies + [round(np.mean(balanced_accuracies),2)]
-            dataframe_balanced_subjects.loc[count] = [seed] + balanced_accuracies_subjects + [round(np.mean(balanced_accuracies_subjects),2)]
+            if not args.fine_tuning:
+                dataframe_balanced_subjects.loc[count] = [seed] + balanced_accuracies_subjects + [round(np.mean(balanced_accuracies_subjects),2)]
         dataframe_balanced['Seed'] = dataframe_balanced['Seed'].astype('int32')
-        dataframe_balanced_subjects['Seed'] = dataframe_balanced_subjects['Seed'].astype('int32')
+        if not args.fine_tuning:
+            dataframe_balanced_subjects['Seed'] = dataframe_balanced_subjects['Seed'].astype('int32')
     
     tmp_acc_list, tmp_bal_acc_list, tmp_bal_acc_sub_list = [], [], []
     for i in range(9):
         key = f'Patient{i+1}'
         f1_score_seeds[key] = [round(x / len(list_seeds), 3) for x in f1_score_seeds[key]]
         tmp_bal_acc_list.append(round(dataframe_balanced[key].mean(), 2))
-        tmp_bal_acc_sub_list.append(round(dataframe_balanced_subjects[key].mean(), 2))
+        if not args.fine_tuning:
+            tmp_bal_acc_sub_list.append(round(dataframe_balanced_subjects[key].mean(), 2))
     
     f1_score_seeds['Average'] = [round(x / len(list_seeds), 3) for x in f1_score_seeds['Average']]
     dataframe_balanced.loc[len(list_seeds)] = ['Average'] + tmp_bal_acc_list + [round(np.mean(tmp_bal_acc_list),2)]
-    dataframe_balanced_subjects.loc[len(list_seeds)] = ['Average'] + tmp_bal_acc_sub_list + [round(np.mean(tmp_bal_acc_sub_list),2)]
+    if not args.fine_tuning:
+        dataframe_balanced_subjects.loc[len(list_seeds)] = ['Average'] + tmp_bal_acc_sub_list + [round(np.mean(tmp_bal_acc_sub_list),2)]
     
     # Salvare il DataFrame in un file CSV
     dataframe_balanced.to_excel(f'{path}/seed_results_{args.network}_balanced.xlsx', index=False)
-    dataframe_balanced_subjects.to_excel(f'{path}/seed_results_{args.network}_balanced_subjects.xlsx', index=False)
+    if not args.fine_tuning:
+        dataframe_balanced_subjects.to_excel(f'{path}/seed_results_{args.network}_balanced_subjects.xlsx', index=False)
     with open(f"{path}/seed_results_{args.network}_f1_score.json", 'w') as f:
         json.dump(f1_score_seeds, f, indent=1)
