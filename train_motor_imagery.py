@@ -64,7 +64,7 @@ def _train(data, labels, labels_subjects, saved_path):
         # print(f"Class weights for this fold: {class_weights}")
         # print(f"Subjects weights for this fold: {subjects_weights}")
         
-        if args.name_model == "MSVTNet" or args.name_model == "MSVTSENet":
+        if args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net":
             criterion_tasks = JointCrossEntropyLoss()
             criterion_subjects = JointCrossEntropyLoss()
         else:
