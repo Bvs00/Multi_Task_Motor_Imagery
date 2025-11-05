@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ]; then
+if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ]; then
     echo "Errore: Devi specificare NET, PRIME, AUG, SAVED_PATH, NORM, BANDPASS, PARADIGM!"
     echo "Utilizzo: NET=<valore> PRIME=<valore> AUG=<valore> ./script.sh"
     exit 1
@@ -14,6 +14,7 @@ echo "$NORM"
 echo "$BANDPASS"
 echo "$PARADIGM"
 echo "$ALPHA"
+echo "$AUX"
 
 if [ "$PRIME" == "1" ]; then
   primes=(42 71 101 113 127 131 139 149 157 163 173 181 322 521)
@@ -33,18 +34,19 @@ normalization="$NORM"
 bandpass="$BANDPASS"
 paradigm="$PARADIGM"
 alpha="$ALPHA"
+aux="$AUX"
 
 for seed in "${primes[@]}"; do
   echo "Train seed: $seed"
   python -u train_motor_imagery.py --seed "$seed" --name_model "$network" --saved_path "$saved_path" --lr 0.001 \
           --augmentation "$aug" --num_workers 5 --normalization "$normalization" --paradigm "$paradigm" \
           --train_set "/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/train_2b_$bandpass.npz" \
-          --alpha "$alpha" --patience 150 --batch_size 72
+          --alpha "$alpha" --patience 150 --batch_size 72 --auxiliary_branch "$aux"
   echo "Test seed: $seed"
   python -u test_motor_imagery.py --name_model "$network" --saved_path "$saved_path" --paradigm "$paradigm" \
           --test_set "/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_$bandpass.npz" \
-          --seed "$seed" --alpha "$alpha"
+          --seed "$seed" --alpha "$alpha" --auxiliary_branch "$aux"
 done
 
-# python create_excel_motor_imagery.py --network "$network" --path "$saved_path"
+python create_excel_motor_imagery.py --network "$network" --path "$saved_path"
 echo 'ok'

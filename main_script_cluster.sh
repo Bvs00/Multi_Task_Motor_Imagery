@@ -6,14 +6,14 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
 #SBATCH --nodelist=gnode09
-#SBATCH --job-name=msvt_se_se_net_075_2a
-#SBATCH --output=msvt_se_se_net_075_2a.log
-#SBATCH --dependency=117212
+#SBATCH --job-name=msvt_se_se_net_025_2b_wout_aux
+#SBATCH --output=msvt_se_se_net_025_2b_wout_aux.log
+#SBATCH --dependency=117193
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
 
-if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$DATASET" ]; then
+if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$DATASET" ] || [ -z "$AUX" ]; then
     echo "Errore: Devi specificare NET, PRIME, AUG, SAVED_PATH, NORM, BANDPASS, PARADIGM!"
     echo "Utilizzo: NET=<valore> PRIME=<valore> AUG=<valore> ./script.sh"
     exit 1
@@ -29,6 +29,7 @@ echo "$PARADIGM"
 echo "$ALPHA"
 echo "$TORCH_DEVICE"
 echo "$DATASET"
+echo "$AUX"
 
 if [ "$PRIME" == "1" ]; then
   primes=(42 71 101 113 127 131 139 149 157 163 173 181 322 521)
@@ -53,16 +54,17 @@ bandpass="$BANDPASS"
 paradigm="$PARADIGM"
 alpha="$ALPHA"
 dataset="$DATASET"
+aux="$AUX"
 
 for seed in "${primes[@]}"; do
   echo "Train seed: $seed"
   $PYTHON -u train_motor_imagery.py --seed "$seed" --name_model "$network" --saved_path "$saved_path" --lr 0.001 \
           --augmentation "$aug" --num_workers 32 --normalization "$normalization" --paradigm "$paradigm" \
           --train_set "/mnt/beegfs/sbove/${dataset}/2_classes/train_${dataset}_$bandpass.npz" \
-          --alpha "$alpha" --patience 150 --batch_size 72 --device "$TORCH_DEVICE"
+          --alpha "$alpha" --patience 150 --batch_size 72 --device "$TORCH_DEVICE" --auxiliary_branch "$aux"
   $PYTHON -u test_motor_imagery.py --name_model "$network" --saved_path "$saved_path" --paradigm "$paradigm" \
           --test_set "/mnt/beegfs/sbove/${dataset}/2_classes/test_${dataset}_$bandpass.npz" \
-          --seed "$seed" --alpha "$alpha" --device "$TORCH_DEVICE"
+          --seed "$seed" --alpha "$alpha" --device "$TORCH_DEVICE" --auxiliary_branch "$aux"
 done
 
 $PYTHON create_excel_motor_imagery.py --network "$network" --path "$saved_path"
