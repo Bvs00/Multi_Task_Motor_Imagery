@@ -5,10 +5,10 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --nodelist=gnode09
-#SBATCH --job-name=msvtsenet_probing_025_2
-#SBATCH --output=msvtsenet_probing_025_2.log
-#SBATCH --dependency=100966
+#SBATCH --nodelist=gnode12
+#SBATCH --job-name=msvtsenet_finetuning_025_1
+#SBATCH --output=msvtsenet_finetuning_025_1.log
+
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
@@ -40,7 +40,7 @@ elif [ "$PRIME" == "3" ]; then
 elif [ "$PRIME" == "4" ]; then
   primes=(127 131 139)
 elif [ "$PRIME" == "5" ]; then
-  primes=(149 157 163 173)
+  primes=(173)
 elif [ "$PRIME" == "6" ]; then
   primes=(181 322 521)
 fi
@@ -68,5 +68,5 @@ for seed in "${primes[@]}"; do
           --seed "$seed" --device "$TORCH_DEVICE"
 done
 
-$PYTHON create_excel_motor_imagery.py --network "$network" --path "$saved_path"
+# $PYTHON create_excel_motor_imagery.py --network "$network" --path "$saved_path"
 echo 'ok'
