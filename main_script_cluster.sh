@@ -6,9 +6,9 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
 #SBATCH --nodelist=gnode05
-#SBATCH --job-name=msvtnet_025_2a_wout_aux
-#SBATCH --output=msvtnet_025_2a_wout_aux.log
-#SBATCH --dependency=119439
+#SBATCH --job-name=msvtsenet_025_2a_wout_aux
+#SBATCH --output=msvtsenet_025_2a_wout_aux.log
+#SBATCH --dependency=124817
 
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
@@ -38,7 +38,7 @@ elif [ "$PRIME" == "2" ]; then
 elif [ "$PRIME" == "3" ]; then
   primes=(42 71 101 113)
 elif [ "$PRIME" == "4" ]; then
-  primes=(127 131 139)
+  primes=(139)
 elif [ "$PRIME" == "5" ]; then
   primes=(149 157 163 173)
 elif [ "$PRIME" == "6" ]; then
