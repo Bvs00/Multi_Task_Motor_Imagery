@@ -39,7 +39,7 @@ aux="$AUX"
 for seed in "${primes[@]}"; do
   echo "Train seed: $seed"
   python -u train_motor_imagery.py --seed "$seed" --name_model "$network" --saved_path "$saved_path" --lr 0.001 \
-          --augmentation "$aug" --num_workers 5 --normalization "$normalization" --paradigm "$paradigm" \
+          --augmentation "$aug" --num_workers 10 --normalization "$normalization" --paradigm "$paradigm" \
           --train_set "/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/train_2b_$bandpass.npz" \
           --alpha "$alpha" --patience 150 --batch_size 72 --auxiliary_branch "$aux"
   echo "Test seed: $seed"
