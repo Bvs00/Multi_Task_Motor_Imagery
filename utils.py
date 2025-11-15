@@ -9,8 +9,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import random
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
-from Networks import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, CTNet, EEGNet, PatchEmbeddingNet_Soft, CTNet_Soft, MSVTNet, \
-    CSETNet, CCBAMTNet, MSVTSENet, MSVT_SE_Net, MSVT_SE_SE_Net
+############ Import Network ############
+from EEGNet import EEGNet
+from PatchEmbeddingNet import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, PatchEmbeddingNet_Soft 
+from MSVTNet import MSVTNet, MSVTSENet, MSVT_SE_Net, MSVT_SE_SE_Net
+from CTNet import CTNet, CTNet_Soft, CSETNet, CCBAMTNet
+################################################
 import seaborn as sns
 from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction, reverse_channels_segmentation_reconstruction
 
