@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def validate_visualization_senet(model, val_loader, criterion_tasks, device, return_attention=True):
     model.eval()
@@ -82,7 +83,17 @@ def plot_se_weights(se_weights, subject, most_important, threshold, name_path):
     plt.savefig(f'{path}/{name_path}_{subject+1}.png')
     plt.close()
     most_important.append({f'Subject {subject+1}': np.where(mean_se_weights > threshold)[0].tolist()})
+    return mean_se_weights
 
+def plot_heatmap(matrix_se_weights, path='prova.png'):
+    h, w = matrix_se_weights.shape
+    plt.figure(figsize=(w * 0.6, h * 0.6))
+    sns.heatmap(matrix_se_weights, annot=True, fmt='.2f', vmin=0, vmax=1, annot_kws={"size": 10}, cmap="coolwarm") # sulle ascisse c'è la prima dimensione mentre sulle ordinate la seconda dimensione
+    plt.ylabel('Subjects')
+    plt.xlabel('Features')
+    plt.tight_layout(pad=0)
+    plt.savefig(path, bbox_inches="tight", pad_inches=0)
+    plt.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -107,6 +118,10 @@ if __name__ == '__main__':
     num_subjects=9
     most_important_branches = {}
     most_important = []
+    
+    matrix_se_weights_inside = np.zeros((4, 9, 9)) # 4 branches 9 soggetti e 9 feature maps
+    matrix_se_weights_outside = np.zeros((9, 72)) # 9 soggetti e 72 feature maps
+    
     for patient in range(len(data_test_tensors)):
         data, labels, subjects = data_test_tensors[patient], labels_test_tensors[patient], subjects_test_tensors[patient]
         
@@ -131,13 +146,11 @@ if __name__ == '__main__':
                 samples=data.shape[3], channels=data.shape[2], **extra_args)
         )
         model.to(args.device)
-        from collections import OrderedDict
-        import torch
 
         old_state = torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth')
         if args.name_model == 'MSVT_SE_SE_Net':
             
-            new_state = OrderedDict()
+            new_state = {}
 
             # mapping table
             map_table = {
@@ -236,10 +249,10 @@ if __name__ == '__main__':
             for count in se_weights_branches:
                 if count not in most_important_branches:
                     most_important_branches[count]=[]
-                plot_se_weights(se_weights_branches[count], patient, most_important_branches[count], args.threshold, f'se_weights_branch_{count}')
+                matrix_se_weights_inside[count][patient] = plot_se_weights(se_weights_branches[count], patient, most_important_branches[count], args.threshold, f'se_weights_branch_{count}')
 
         if len(se_weights) != 0:
-            plot_se_weights(se_weights, patient, most_important, args.threshold, 'se_weights')
+            matrix_se_weights_outside[patient]=plot_se_weights(se_weights, patient, most_important, args.threshold, 'se_weights')
 
     if len(most_important_branches)!=0:
         with open(f'{args.saved_path_plot}/{args.name_model}/Most_Important_SE_Weights_Inside_Branches.json', 'w') as f:
@@ -259,3 +272,9 @@ if __name__ == '__main__':
                 count_feature_maps[value]+=1
     sorted_dict = dict(sorted(count_feature_maps.items(), key=lambda item: item[1], reverse=True))
     print(sorted_dict)
+    if matrix_se_weights_inside.any() != 0:
+        branches, subjects, features = matrix_se_weights_inside.shape
+        matrix_se_weights_inside = matrix_se_weights_inside.transpose(1, 0, 2).reshape(subjects, branches*features)
+        plot_heatmap(matrix_se_weights_inside, path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_inside_matrix.png')
+    if matrix_se_weights_outside.any() != 0:
+        plot_heatmap(matrix_se_weights_outside, path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_outside_matrix.png')
