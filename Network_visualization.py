@@ -5,30 +5,11 @@ from einops.layers.torch import Rearrange
 from einops import rearrange
 import torch.nn.functional as F
 import math
-
+from MSVTNet import TSConv
 
 #################################################################################################################################
 #################################################            MSVTNet            #################################################
 #################################################################################################################################
-
-
-class TSConv(nn.Sequential):
-    def __init__(self, nCh, F, C1, C2, D, P1, P2, Pc) -> None:
-        super().__init__(
-            nn.Conv2d(1, F, (1, C1), padding='same', bias=False),
-            nn.BatchNorm2d(F),
-            nn.Conv2d(F, F * D, (nCh, 1), groups=F, bias=False),
-            nn.BatchNorm2d(F * D),
-            nn.ELU(),
-            nn.AvgPool2d((1, P1)),
-            nn.Dropout(Pc),
-            nn.Conv2d(F * D, F * D, (1, C2), padding='same', groups=F * D, bias=False),
-            nn.BatchNorm2d(F * D),
-            nn.ELU(),
-            nn.AvgPool2d((1, P2)),
-            nn.Dropout(Pc)
-        )
-
 
 class PositionalEncoding(nn.Module):
     def __init__(self, seq_len, d_model) -> None:
@@ -78,79 +59,6 @@ class ClsHead(nn.Sequential):
             nn.LogSoftmax(dim=1)
         )
 
-
-class MSVTNet(nn.Module):
-    def __init__(
-        self, channels = 3, samples = 1000, num_classes = 2, model_name_prefix = 'MSVTNet', subjects = 9,
-        F = [9, 9, 9, 9], C1 = [15, 31, 63, 125], C2 = 15, D = 2, P1 = 8, P2 = 7, Pc = 0.3,
-        nhead = 8,
-        ff_ratio = 1,
-        Pt = 0.5,
-        layers = 2,
-        b_preds = True,
-    ) -> None:
-        super().__init__()
-        self.model_name_prefix = model_name_prefix
-        self.nCh = channels
-        self.nTime = samples
-        self.b_preds = b_preds
-        self.subjects=subjects
-        assert len(F) == len(C1), 'The length of F and C1 should be equal.'
-
-        self.mstsconv = nn.ModuleList([
-            nn.Sequential(
-                TSConv(self.nCh, F[b], C1[b], C2, D, P1, P2, Pc),
-                Rearrange('b d 1 t -> b t d')   # b x 18 x 1 x 17 e le feature maps diventano le nostra informazioni per ogni token (la lista di token diventa 17)
-            )
-            for b in range(len(F))
-        ])
-        branch_linear_in = self._forward_flatten(cat=False)
-        
-        self.branch_head_task = nn.ModuleList([
-            ClsHead(branch_linear_in[b].shape[1], num_classes)
-            for b in range(len(F))
-        ])
-        self.branch_head_subject = nn.ModuleList([
-            ClsHead(branch_linear_in[b].shape[1], subjects)
-            for b in range(len(F))
-        ])
-
-        seq_len, d_model = self._forward_mstsconv().shape[1:3] # type: ignore
-        self.transformer = Transformer(seq_len, d_model, nhead, ff_ratio, Pt, layers)
-
-        linear_in = self._forward_flatten().shape[1] # type: ignore
-        self.last_head_task = ClsHead(linear_in, num_classes)
-        self.last_head_subject = ClsHead(linear_in, subjects)
-
-    def _forward_mstsconv(self, cat = True):
-        x = torch.randn(1, 1, self.nCh, self.nTime)
-        x = [tsconv(x) for tsconv in self.mstsconv]
-        if cat:
-            x = torch.cat(x, dim=2)
-        return x
-
-    def _forward_flatten(self, cat = True):
-        x = self._forward_mstsconv(cat)
-        if cat:
-            x = self.transformer(x)
-            x = x.flatten(start_dim=1, end_dim=-1)
-        else:
-            x = [_.flatten(start_dim=1, end_dim=-1) for _ in x]
-        return x
-
-    def forward(self, x):
-        x = [tsconv(x) for tsconv in self.mstsconv]
-        bx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head_task)]
-        cx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head_subject)]
-        x = torch.cat(x, dim=2)
-        x = self.transformer(x)
-        output_task = self.last_head_task(x)
-        output_subject = self.last_head_subject(x)
-        if self.b_preds:
-            return [output_task, bx], [output_subject, cx]
-        else:
-            return output_task, output_subject
-        
 ######################################  MSVTSENet ######################################
 # SENet (Squeeze-and-Excitation Network) per l'attenzione sui canali
 class SENet(nn.Module):
@@ -161,11 +69,13 @@ class SENet(nn.Module):
         self.fc2 = nn.Linear(channels // reduction, channels)  # Espansione dimensionale
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
         batch, feature_maps, _, _ = x.shape
         y = self.global_avg_pool(x).view(batch, feature_maps)  # Global Average Pooling
         y = F.relu(self.fc1(y))  # ReLU dopo la riduzione dimensionale
         y = self.sigmoid(self.fc2(y)).view(batch, feature_maps, 1, 1)  # Sigmoid e reshape
+        if return_attention:
+            return x * y, y
         return x * y  # Applicazione dei pesi ai canali originali
 
 class MSVTSENet(nn.Module):
@@ -232,36 +142,70 @@ class MSVTSENet(nn.Module):
         branch_task = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head_task)]
         branch_subject = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head_subject)]
         x = torch.cat(x, dim=1)
-        x = self.se_layer(x)
+        if return_attention:
+            x, se_weights = self.se_layer(x, return_attention)
+        else:
+            x = self.se_layer(x)
         x = self.rearrange(x)
         x = self.transformer(x)
         output_task = self.last_head_task(x)
         output_subject = self.last_head_subject(x)
         if self.b_preds:
-            return [output_task, branch_task], [output_subject, branch_subject]
+            return [[output_task, branch_task], [output_subject, branch_subject], None, se_weights] if return_attention else [[output_task, branch_task], [output_subject, branch_subject]]
         else:
-            return output_task, output_subject
+            return [output_task, output_subject, None, se_weights] if return_attention else [output_task, output_subject]
 
 
 ################################### MSVT_SE_Net #######################################
 
-class TSConv_SE(nn.Sequential):
-    def __init__(self, nCh, F, C1, C2, D, P1, P2, Pc) -> None:
-        super().__init__(
-            nn.Conv2d(1, F, (1, C1), padding='same', bias=False),
-            SENet(F),
-            nn.BatchNorm2d(F),
-            nn.Conv2d(F, F * D, (nCh, 1), groups=F, bias=False),
-            nn.BatchNorm2d(F * D),
-            nn.ELU(),
-            nn.AvgPool2d((1, P1)),
-            nn.Dropout(Pc),
-            nn.Conv2d(F * D, F * D, (1, C2), padding='same', groups=F * D, bias=False),
-            nn.BatchNorm2d(F * D),
-            nn.ELU(),
-            nn.AvgPool2d((1, P2)),
-            nn.Dropout(Pc)
-        )
+class TSConv_SE(nn.Module):
+    def __init__(self, nCh, F, C1, C2, D, P1, P2, Pc):
+        super().__init__()
+
+        # --- First stage ---
+        self.conv1 = nn.Conv2d(1, F, (1, C1), padding='same', bias=False)
+        self.se1 = SENet(F)
+        self.bn1 = nn.BatchNorm2d(F)
+
+        # --- Depthwise conv (spatial) ---
+        self.depth_conv1 = nn.Conv2d(F, F * D, (nCh, 1), groups=F, bias=False)
+        self.bn2 = nn.BatchNorm2d(F * D)
+        self.act1 = nn.ELU()
+        self.pool1 = nn.AvgPool2d((1, P1))
+        self.drop1 = nn.Dropout(Pc)
+
+        # --- Temporal depthwise conv ---
+        self.depth_conv2 = nn.Conv2d(F * D, F * D, (1, C2),
+                                     padding='same', groups=F * D, bias=False)
+        self.bn3 = nn.BatchNorm2d(F * D)
+        self.act2 = nn.ELU()
+        self.pool2 = nn.AvgPool2d((1, P2))
+        self.drop2 = nn.Dropout(Pc)
+
+    def forward(self, x, return_attention=False):
+        # First convolution + SE + BN
+        x = self.conv1(x)
+        if return_attention:
+            x, se_weights = self.se1(x, return_attention)
+        else:
+            x = self.se1(x)
+        x = self.bn1(x)
+
+        # Depthwise spatial conv
+        x = self.depth_conv1(x)
+        x = self.bn2(x)
+        x = self.act1(x)
+        x = self.pool1(x)
+        x = self.drop1(x)
+
+        # Depthwise temporal conv
+        x = self.depth_conv2(x)
+        x = self.bn3(x)
+        x = self.act2(x)
+        x = self.pool2(x)
+        x = self.drop2(x)
+
+        return [x, se_weights] if return_attention else x 
 
 
 
@@ -323,8 +267,13 @@ class MSVT_SE_Net(nn.Module):
             x = [_.flatten(start_dim=1, end_dim=-1) for _ in x]
         return x
 
-    def forward(self, x):
-        x = [tsconv(x) for tsconv in self.mstsconv]
+    def forward(self, x, return_attention):
+        if return_attention:
+            tsconv_se_out = [tsconv[0](x, return_attention) for tsconv in self.mstsconv]
+            x = [tsconv[1](tsconv_se_out[i][0]) for i,tsconv in enumerate(self.mstsconv)]
+            se_weights_branches = [branch[1] for branch in tsconv_se_out]
+        else:
+            x = [tsconv(x) for tsconv in self.mstsconv]
         bx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head)]
         cx = [branch(x[idx]) for idx, branch in enumerate(self.branch_head_subject)]
         x = torch.cat(x, dim=2)
@@ -332,9 +281,9 @@ class MSVT_SE_Net(nn.Module):
         output_task = self.last_head_task(x)
         output_subject = self.last_head_subject(x)
         if self.b_preds:
-            return [output_task, bx], [output_subject, cx]
+            return [[output_task, bx], [output_subject, cx], se_weights_branches, None] if return_attention else [[output_task, bx], [output_subject, cx]]
         else:
-            return output_task, output_subject
+            return [output_task, output_subject, se_weights_branches, None] if return_attention else [output_task, output_subject]
 
 
 ################################### MSVT_SE_SE_Net #######################################
@@ -356,7 +305,7 @@ class MSVT_SE_SE_Net(nn.Module):
         self.b_preds = b_preds
         self.subjects=subjects
         assert len(F) == len(C1), 'The length of F and C1 should be equal.'
-        print(F)
+
         self.mstsconv = nn.ModuleList([
             TSConv_SE(self.nCh, F[b], C1[b], C2, D, P1, P2, Pc)
             for b in range(len(F))
@@ -398,17 +347,32 @@ class MSVT_SE_SE_Net(nn.Module):
             x = [_.flatten(start_dim=1, end_dim=-1) for _ in x]
         return x
 
-    def forward(self, x):
-        x = [tsconv(x) for tsconv in self.mstsconv]
+    def forward(self, x, return_attention=False):
+        if return_attention:
+            x = [tsconv(x, return_attention) for tsconv in self.mstsconv]
+            se_weights_branches = [branch[1] for branch in x]
+            x = [branch[0] for branch in x]
+        else:
+            x = [tsconv(x) for tsconv in self.mstsconv]
         branch_task = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head)]
         branch_subject = [branch(self.rearrange(x[idx])) for idx, branch in enumerate(self.branch_head_subject)]
         x = torch.cat(x, dim=1)
-        x = self.se_layer(x)
-        x = self.rearrange(x)
-        x = self.transformer(x)
-        output_task = self.last_head_task(x)
-        output_subject = self.last_head_subject(x)
-        if self.b_preds:
-            return [output_task, branch_task], [output_subject, branch_subject]
+        if return_attention:
+            x, se_weights = self.se_layer(x, return_attention)
         else:
-            return output_task, output_subject
+            x = self.se_layer(x)
+        x = self.rearrange(x)
+        latent_representation = self.transformer(x)
+        output_task = self.last_head_task(latent_representation)
+        output_subject = self.last_head_subject(latent_representation)
+        if self.b_preds:
+            return [[output_task, branch_task], [output_subject, branch_subject], se_weights_branches, se_weights] if return_attention else [[output_task, branch_task], [output_subject, branch_subject], latent_representation]
+        else:
+            return [output_task, output_subject, se_weights_branches, se_weights] if return_attention else [output_task, output_subject, latent_representation]
+        
+        
+network_factory_methods = {
+    'MSVTSENet': MSVTSENet,
+    'MSVT_SE_Net': MSVT_SE_Net,
+    'MSVT_SE_SE_Net': MSVT_SE_SE_Net
+}

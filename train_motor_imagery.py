@@ -43,7 +43,7 @@ def _train(data, labels, labels_subjects, saved_path):
     # Iterare su ciascun fold
     for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
         fix_seeds(args.seed)
-        extra_args = {'b_preds': args.auxiliary_branch} if 'MS' in args.name_model else {}
+        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, 'P1': args.p1, 'P2': args.p2} if 'MS' in args.name_model else {}
         model = (
             network_factory_methods[args.name_model](
                 model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
@@ -74,7 +74,8 @@ def _train(data, labels, labels_subjects, saved_path):
         
         train_model(model=model, fold_performance=fold_performance, train_loader=train_loader, val_loader=val_loader, 
                     fold=fold, lr=args.lr, alpha=args.alpha, criterion_tasks=criterion_tasks, criterion_subjects=criterion_subjects, 
-                    epochs=args.epochs, device=args.device, augmentation=args.augmentation, patience=args.patience, checkpoint_flag=args.checkpoint_flag)
+                    epochs=args.epochs, device=args.device, augmentation=args.augmentation, num_augmentations=args.num_augmentations, 
+                    patience=args.patience, checkpoint_flag=args.checkpoint_flag)
 
     with open(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt', 'w') as f:
         pass
@@ -105,10 +106,14 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument('--num_workers', type=int, default=5)
     parser.add_argument('--augmentation', type=str, choices=available_augmentation, default=None)
+    parser.add_argument('--num_augmentations', type=int, default=3)
     parser.add_argument('--normalization', type=str, choices=available_normalization, default='Z_Score_unique')
     parser.add_argument('--paradigm', type=str, choices=available_paradigm, default='Cross')
     parser.add_argument('--alpha', type=float, default=0.5)
     parser.add_argument('--auxiliary_branch', type=str, default='True')
+    parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
+    parser.add_argument('--p1', type=int, default=8)
+    parser.add_argument('--p2', type=int, default=7)
     parser.add_argument('-checkpoint_flag', action='store_true', default=True)
     args = parser.parse_args()
     

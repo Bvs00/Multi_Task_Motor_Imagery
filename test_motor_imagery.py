@@ -20,6 +20,9 @@ if __name__ == '__main__':
     parser.add_argument('--paradigm', type=str, choices=available_paradigm, default='Cross')
     parser.add_argument('--alpha', type=float, default=0.5)
     parser.add_argument('--auxiliary_branch', type=str, default='True')
+    parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
+    parser.add_argument('--p1', type=int, default=8)
+    parser.add_argument('--p2', type=int, default=7)
     args = parser.parse_args()
     
     args.auxiliary_branch = True if args.auxiliary_branch == 'True' else False
@@ -61,7 +64,7 @@ if __name__ == '__main__':
         test_loader = DataLoader(dataset, batch_size=256, num_workers=5)
 
         best_fold = find_minum_loss(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt')
-        extra_args = {'b_preds': args.auxiliary_branch} if 'MS' in args.name_model else {}
+        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, 'P1': args.p1, 'P2': args.p2} if 'MS' in args.name_model else {}
         model = (
             network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
                 num_classes=len(np.unique(labels)), subjects=num_subjects,

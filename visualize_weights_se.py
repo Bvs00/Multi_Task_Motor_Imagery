@@ -1,7 +1,8 @@
 import sys
 import os
 from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, validate_loso, validate_fine_tuning, \
-    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntropyLoss
+    load_normalizations, available_paradigm, available_network, JointCrossEntropyLoss
+from Network_visualization import network_factory_methods
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
 import json
@@ -85,21 +86,54 @@ def plot_se_weights(se_weights, subject, most_important, threshold, name_path):
     most_important.append({f'Subject {subject+1}': np.where(mean_se_weights > threshold)[0].tolist()})
     return mean_se_weights
 
-def plot_heatmap(matrix_se_weights, path='prova.png'):
+def plot_heatmap(matrix_se_weights, path='prova.png', title=''):
     h, w = matrix_se_weights.shape
-    plt.figure(figsize=(w * 0.6, h * 0.6))
-    sns.heatmap(matrix_se_weights, annot=True, fmt='.2f', vmin=0, vmax=1, annot_kws={"size": 10}, cmap="coolwarm") # sulle ascisse c'è la prima dimensione mentre sulle ordinate la seconda dimensione
-    plt.ylabel('Subjects')
-    plt.xlabel('Features')
+    plt.figure(tight_layout=True)
+    # cmap = sns.diverging_palette(220, 20, sep=20, as_cmap=True)
+    # cmap=sns.color_palette("Blues", as_cmap=True)
+    # cmap=sns.color_palette("vlag", as_cmap=True)
+    # cmap=sns.color_palette("icefire", as_cmap=True)
+    # cmap=sns.diverging_palette(220, 20, as_cmap=True)
+    # cmap=sns.diverging_palette(145, 300, s=60, as_cmap=True)
+    # cmap=sns.diverging_palette(250, 30, l=65, center="dark", as_cmap=True)
+    # cmap=sns.color_palette("Spectral", as_cmap=True)
+    cmap=sns.color_palette("coolwarm", as_cmap=True)
+    # cmap=sns.color_palette("viridis", as_cmap=True)
+    # cmap=sns.color_palette("magma", as_cmap=True)
+    # cmap=sns.color_palette("rocket", as_cmap=True)
+    ax = sns.heatmap(matrix_se_weights, vmin=np.min(matrix_se_weights, axis=(0,1)), vmax=np.max(matrix_se_weights, axis=(0,1)), cmap=cmap) # sulle ascisse c'è la prima dimensione mentre sulle ordinate la seconda dimensione #coolwarm
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=20)
+    ax.set_ylim(0, matrix_se_weights.shape[0])
+    ax.tick_params(axis='x', labelsize=20)
+    ax.tick_params(axis='y', labelsize=20)
+    
+    x_ticks = [0,1,2,3,4,5,6,7,8,9] # 0 = inizio, 34 = fine
+    x_labels = [0,1,2,3,4,5,6,7,8,9] if 'Second' in title else [0,1,2,3,4,5,6,7,8,75] # inserisci 125 al posto di 9 per mantenere la stessa proporzione con la heatmap delle frequenze
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_labels, rotation=45)
+    
+    y_ticks = [0, 18, 36, 54, 72]  if h > 70 else [0, 9, 18, 27, 36]# 0 = inizio, 34 = fine
+    # y_labels = [1, 10, 19, 28, 37]
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels(y_ticks, rotation=90)
+    
+    for y in [18, 36, 54] if h >70 else [9, 18, 27]:
+        plt.axhline(y=y, c='black')
+    
+    plt.title(title, fontsize=20)
+    plt.xlabel('Subjects', fontsize=20)
+    if 'Second' in title:
+        plt.ylabel('Feature Maps', fontsize=20)
     plt.tight_layout(pad=0)
-    plt.savefig(path, bbox_inches="tight", pad_inches=0)
+    plt.savefig(path, bbox_inches="tight", pad_inches=0.05)
     plt.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_set', type=str, default='/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_full.npz')
-    parser.add_argument("--name_model", type=str, default='MSVT_SE_Net', help="Name of model that use", choices=available_network)
-    parser.add_argument('--saved_path', type=str, default='Results_2B/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_Net_Wout_Aux')
+    parser.add_argument("--name_model", type=str, default='MSVT_SE_SE_Net', help="Name of model that use", choices=available_network)
+    parser.add_argument('--saved_path', type=str, default='Results_2B/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
     parser.add_argument('--saved_path_plot', type=str, default='Visualization_SE_Weights')
     parser.add_argument('--device', type=str, default='cuda:0' if torch.cuda.is_available() else'cpu')
     parser.add_argument('--seed', type=int, default=42)
@@ -119,7 +153,7 @@ if __name__ == '__main__':
     most_important_branches = {}
     most_important = []
     
-    matrix_se_weights_inside = np.zeros((4, 9, 9)) # 4 branches 9 soggetti e 9 feature maps
+    matrix_se_weights_inside = np.zeros((9, 4, 9)) # 4 branches 9 soggetti e 9 feature maps
     matrix_se_weights_outside = np.zeros((9, 72)) # 9 soggetti e 72 feature maps
     
     for patient in range(len(data_test_tensors)):
@@ -234,6 +268,7 @@ if __name__ == '__main__':
                 new_state[new_key] = v
         else: 
             new_state=old_state
+        
         model.load_state_dict(new_state)
 
         if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" or args.name_model == "MSVT_SE_SE_Net") and (args.auxiliary_branch):
@@ -249,8 +284,7 @@ if __name__ == '__main__':
             for count in se_weights_branches:
                 if count not in most_important_branches:
                     most_important_branches[count]=[]
-                matrix_se_weights_inside[count][patient] = plot_se_weights(se_weights_branches[count], patient, most_important_branches[count], args.threshold, f'se_weights_branch_{count}')
-
+                matrix_se_weights_inside[patient, count] = plot_se_weights(se_weights_branches[count], patient, most_important_branches[count], args.threshold, f'se_weights_branch_{count}')
         if len(se_weights) != 0:
             matrix_se_weights_outside[patient]=plot_se_weights(se_weights, patient, most_important, args.threshold, 'se_weights')
 
@@ -273,8 +307,8 @@ if __name__ == '__main__':
     sorted_dict = dict(sorted(count_feature_maps.items(), key=lambda item: item[1], reverse=True))
     print(sorted_dict)
     if matrix_se_weights_inside.any() != 0:
-        branches, subjects, features = matrix_se_weights_inside.shape
-        matrix_se_weights_inside = matrix_se_weights_inside.transpose(1, 0, 2).reshape(subjects, branches*features)
-        plot_heatmap(matrix_se_weights_inside, path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_inside_matrix.png')
+        subjects, branches, features = matrix_se_weights_inside.shape
+        matrix_se_weights_inside = matrix_se_weights_inside.reshape(subjects, branches*features).transpose(1,0)
+        plot_heatmap(matrix_se_weights_inside, path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_inside_matrix.png', title='First SE Module Weights')
     if matrix_se_weights_outside.any() != 0:
-        plot_heatmap(matrix_se_weights_outside, path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_outside_matrix.png')
+        plot_heatmap(matrix_se_weights_outside.transpose(1,0), path=f'{args.saved_path_plot}/{args.name_model}/Heatmap_outside_matrix.png', title='Second SE Module Weights')

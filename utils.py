@@ -220,6 +220,8 @@ available_normalization = [
 ]
 
 ########################## CREATE TENSORS ###########################
+# 0 -> mano sinistra
+# 1 -> mano destra
 def create_tensors(dataset_path):
     dataset = np.load(dataset_path, allow_pickle=True)
     data_tensor = []
@@ -552,7 +554,7 @@ def validate_autoencoder(model, val_loader, criterion_tasks, criterion_reconstru
 
 
 def train_model(model, fold_performance, train_loader, val_loader, fold, criterion_tasks, 
-                criterion_subjects, lr, epochs, device, augmentation, patience, alpha, checkpoint_flag):
+                criterion_subjects, lr, epochs, device, augmentation, num_augmentations, patience, alpha, checkpoint_flag):
     
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.999))
     best_val_loss = float('inf')
@@ -608,7 +610,7 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, criteri
         for x_raw, label, subject in train_loader:
             x_raw, label, subject = x_raw.to(device), label.to(device), subject.to(device)
             if augmentation is not None:
-                x_raw, label, subject = augmentation_factory_methods[augmentation](x_raw,label, subject)
+                x_raw, label, subject = augmentation_factory_methods[augmentation](x_raw,label, subject, num_augmentations=num_augmentations)
             optimizer.zero_grad()
             output_tasks, output_subjects = model(x_raw)
 
