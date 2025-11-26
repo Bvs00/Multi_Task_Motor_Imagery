@@ -40,7 +40,7 @@ class EEGNet(nn.Module):
                  kernel_1: int = 64, #64
                  kernel_2: int = 16, #16
                  dropout: float = 0.25,
-                 model_name_prefix='EEGNet', subject=9):
+                 model_name_prefix='EEGNet', subjects=9):
         super(EEGNet, self).__init__()
         self.F1 = F1
         self.F2 = F2
@@ -78,7 +78,7 @@ class EEGNet(nn.Module):
             nn.Dropout(p=dropout))
 
         self.lin_tasks = nn.Linear(self.feature_dim(), num_classes, bias=False)
-        self.lin_subjects = nn.Linear(self.feature_dim(), subject, bias=False)
+        self.lin_subjects = nn.Linear(self.feature_dim(), subjects, bias=False)
 
     def feature_dim(self):
         with torch.no_grad():
@@ -100,7 +100,7 @@ class EEGNet(nn.Module):
         x = self.block1(x)
         x = self.block2(x)
         x = x.flatten(start_dim=1)
-        out_tasks = self.lin_tasks(x)
+        out_task = self.lin_tasks(x)
         out_subject = self.lin_subjects(x)
 
-        return out_tasks, out_subject
+        return out_task, out_subject
