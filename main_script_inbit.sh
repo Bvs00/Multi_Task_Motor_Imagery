@@ -9,6 +9,7 @@ fi
 # MAPS="9 9 9 9"
 # P1=8
 # P2=7
+echo "SONO IN INBIT SCRIPT"
 echo "$NET"
 echo "$PRIME"
 echo "$AUG"
@@ -55,12 +56,12 @@ for seed in "${primes[@]}"; do
   echo "Train seed: $seed"
   python -u train_motor_imagery.py --seed "$seed" --name_model "$network" --saved_path "$saved_path" --lr 0.001 \
           --augmentation "$aug" --num_augmentations "$num_aug" --num_workers 5 --normalization "$normalization" \
-          --paradigm "$paradigm" --train_set "/mnt/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/train_${dataset}_$bandpass.npz" \
+          --paradigm "$paradigm" --train_set "/home/inbit/Scrivania/Datasets/${dataset}/Signals_BCI_2classes/train_${dataset}_$bandpass.npz" \
           --alpha "$alpha" --patience 150 --batch_size 72 --auxiliary_branch "$aux" --feature_maps $maps \
           --p1 "$p1" --p2 "$p2"
   echo "Test seed: $seed"
   python -u test_motor_imagery.py --name_model "$network" --saved_path "$saved_path" --paradigm "$paradigm" \
-          --test_set "/mnt/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/test_${dataset}_$bandpass.npz" \
+          --test_set "/home/inbit/Scrivania/Datasets/${dataset}/Signals_BCI_2classes/test_${dataset}_$bandpass.npz" \
           --seed "$seed" --alpha "$alpha" --auxiliary_branch "$aux" --feature_maps $maps \
           --p1 "$p1" --p2 "$p2"
 done
