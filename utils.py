@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import random
-from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score
+from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced_accuracy_score, cohen_kappa_score
 ############ Import Network ############
 from EEGNet import EEGNet
 from PatchEmbeddingNet import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, PatchEmbeddingNet_Soft 
@@ -480,8 +480,11 @@ def validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, devi
         accuracy_subjects = accuracy_score(all_labels_subjects, all_preds_subjects)
         balanced_accuracy_tasks = balanced_accuracy_score(all_labels_tasks, all_preds_tasks)
         balanced_accuracy_subjects = balanced_accuracy_score(all_labels_subjects, all_preds_subjects)
-        # conf_matrix = confusion_matrix(all_labels, all_preds)
-    return avg_loss, avg_loss_tasks, avg_loss_subjects, f1_tasks.tolist(), f1_subjects.tolist(), accuracy_tasks, accuracy_subjects, balanced_accuracy_tasks, balanced_accuracy_subjects
+        kappa_tasks = cohen_kappa_score(all_labels_tasks, all_preds_tasks)
+        
+    return avg_loss, avg_loss_tasks, avg_loss_subjects, f1_tasks.tolist(), f1_subjects.tolist(), \
+        accuracy_tasks, accuracy_subjects, balanced_accuracy_tasks, balanced_accuracy_subjects, \
+        kappa_tasks
 
 def validate_loso(model, val_loader, criterion_tasks, criterion_subjects, alpha, device):
     model.eval()
@@ -629,7 +632,7 @@ def train_model(model, fold_performance, train_loader, val_loader, fold, criteri
         val_loss_subjects, val_f1_tasks, 
         val_f1_subjects, val_accuracy_tasks, 
         val_accuracy_subjects, val_balanced_accuracy_tasks, 
-        val_balanced_accuracy_subjects) = validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, device)
+        val_balanced_accuracy_subjects, _) = validate(model, val_loader, criterion_tasks, criterion_subjects, alpha, device)
 
         # Early Stopping
         if val_loss < best_val_loss:

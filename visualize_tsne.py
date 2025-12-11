@@ -4,7 +4,6 @@ from Network_visualization import network_factory_methods
 import argparse
 import torch
 from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import os
 import numpy as np
@@ -70,8 +69,9 @@ if __name__ == '__main__':
     parser.add_argument("--train_set", type=str,
                         default="/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_full.npz", help="Path to train set file")
     parser.add_argument("--name_model", type=str, default='MSVT_SE_SE_Net', help="Name of model that use", choices=available_network)
-    parser.add_argument('--saved_path', type=str, default='Results_2B/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
+    parser.add_argument('--saved_path', type=str, default='Results_2b/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
     parser.add_argument('--saved_path_plot', type=str, default='Visualization_TSNE')
+    parser.add_argument('--dataset', type=str, default='Dataset_2B')
     parser.add_argument('--device', type=str, default='cuda:0' if torch.cuda.is_available() else'cpu')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--paradigm', type=str, choices=available_paradigm, default='Cross')
@@ -104,15 +104,14 @@ if __name__ == '__main__':
         data = (data - min_)/(max_ - min_)
     
     data_reshape = torch.reshape(data, [data.shape[0], -1]).numpy()
-    data_embedded_pca = PCA(n_components=50).fit_transform(data_reshape)
-    data_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(data_embedded_pca)
+    data_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(data_reshape)
     
     y_subjects = labels_subjects.numpy()
     y_tasks = labels.numpy()
     
-    plot_data(data_embedded, y=y_subjects, colors=colors, markers=markers, path='Dataset_2B', name_file='Original_Data_Subjects', \
+    plot_data(data_embedded, y=y_subjects, colors=colors, markers=markers, path=args.dataset, name_file='Original_Data_Subjects', \
         title='2D Representation of Original Data grouped for Subjects')
-    plot_data(data_embedded, y=y_tasks, colors=colors, markers=markers, path='Dataset_2B', name_file='Original_Data_Tasks', \
+    plot_data(data_embedded, y=y_tasks, colors=colors, markers=markers, path=args.dataset, name_file='Original_Data_Tasks', \
         title='2D Representation of Original Data grouped for Tasks')
     
     
@@ -221,13 +220,16 @@ if __name__ == '__main__':
         model.eval()
         _, _, latent_representation = model(data)
     
+    mean_tmp = torch.mean(latent_representation, dim=(0))
+    std_tmp = torch.std(latent_representation, dim=(0))
+    latent_representation = (latent_representation-mean_tmp)/std_tmp
+    
     latent_representation = latent_representation.cpu().numpy()
-    latent_representation_pca = PCA(n_components=50).fit_transform(latent_representation)
-    latent_representation_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(latent_representation_pca)
-    plot_data(latent_representation_embedded, y=y_subjects, colors=colors, markers=markers, path='Dataset_2B', \
-        name_file='MSVT_SE_SE_Net_Data_Subjects', title='2D Representation of Latent Representation of Original Data grouped for Subjects')
-    plot_data(latent_representation_embedded, y=y_tasks, colors=colors, markers=markers, path='Dataset_2B', \
-        name_file='MSVT_SE_SE_Net_Data_Tasks', title='2D Representation of Latent Representation of Original Data grouped for Tasks')
+    latent_representation_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(latent_representation)
+    plot_data(latent_representation_embedded, y=y_subjects, colors=colors, markers=markers, path=args.dataset, \
+        name_file=f'{args.name_model}_Data_Subjects', title='2D Representation of Latent Representation of Original Data grouped for Subjects')
+    plot_data(latent_representation_embedded, y=y_tasks, colors=colors, markers=markers, path=args.dataset, \
+        name_file=f'{args.name_model}_Data_Tasks', title='2D Representation of Latent Representation of Original Data grouped for Tasks')
     
     print('finish')
         

@@ -31,6 +31,7 @@ if __name__ == '__main__':
     loss_list, final_results = [], []
     loss_list_tasks, f1_list_tasks, accuracy_list_tasks, balanced_accuracy_list_tasks = [], [], [], []
     loss_list_subjects, f1_list_subjects, accuracy_list_subjects, balanced_accuracy_list_subjects = [], [], [], []
+    kappa_tasks_list = []
     num_subjects=9
     
     if args.paradigm=='Single':
@@ -109,25 +110,28 @@ if __name__ == '__main__':
             val_loss_subjects, val_f1_tasks, 
             val_f1_subjects, val_accuracy_tasks, 
             val_accuracy_subjects, val_balanced_accuracy_tasks, 
-            val_balanced_accuracy_subjects) = validate(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
+            val_balanced_accuracy_subjects, val_kappa_tasks) = validate(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
 
             loss_list.append(val_loss), loss_list_tasks.append(val_loss_tasks), loss_list_subjects.append(val_loss_subjects)
             f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks), balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
             f1_list_subjects.append(val_f1_subjects), accuracy_list_subjects.append(val_accuracy_subjects), balanced_accuracy_list_subjects.append(val_balanced_accuracy_subjects)
-
+            kappa_tasks_list.append(val_kappa_tasks)
+            
             final_results.append({'Patient': patient+1, 'Loss': val_loss, 
                                 'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks,
-                                'Accuracy Subjects': val_accuracy_subjects, 'Balanced Accuracy Subjects': val_balanced_accuracy_subjects})
+                                'Accuracy Subjects': val_accuracy_subjects, 'Balanced Accuracy Subjects': val_balanced_accuracy_subjects, 
+                                'Kappa Tasks': val_kappa_tasks})
     
     if args.paradigm == 'LOSO' or args.paradigm == 'Single':
         final_results.append(
         {f"Average": {"F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), 
-                      "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks)}})
+                      "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks), 
+                      'Kappa Tasks': np.mean(kappa_tasks_list)}})
     else:
         final_results.append(
             {f"Average": {"Loss": np.mean(loss_list), 
                         "F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks),
-                        "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects)}}
+                        "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects), }}
         )
 
     with open(f'{args.saved_path}/Final_results_{args.name_model}_seed{args.seed}.json', 'w') as f:
