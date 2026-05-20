@@ -10,10 +10,10 @@ import seaborn as sns
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--name_model", type=str, default='MSVT_SE_SE_Net', help="Name of tensors that use", choices=available_network)
-    parser.add_argument('--saved_path', type=str, default='Results_2B/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
-    parser.add_argument('--saved_path_visualization', type=str, default='Visualization_Frequency_Convolutional_Kernels')
+    parser.add_argument('--saved_path', type=str, default='Results_2b/Results_Alpha001/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net')
+    parser.add_argument('--saved_path_visualization', type=str, default='Visualization_Frequency_Convolutional_Kernels/Dataset_2b/Alpha_001')
     parser.add_argument("--seed", type=int, default=42, help="Seed of initialization")
-    parser.add_argument('--auxiliary_branch', type=str, default='False')
+    parser.add_argument('--auxiliary_branch', type=str, default='True')
     parser.add_argument("--labels", type=int, default=2)
     parser.add_argument("--num_subjects", type=int, default=9)
     parser.add_argument("--samples", type=int, default=1000)
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # fig.suptitle('Frequency response in convolutional kernels')
     count = 0
     for branch in range(4):
-        if args.name_model == 'MSVT_SE_Net' or 'MSVTNet':
+        if args.name_model == 'MSVT_SE_Net' or args.name_model == 'MSVTNet':
             conv = model.mstsconv[branch][0][0]
         else:
             conv = model.mstsconv[branch][0]
@@ -54,6 +54,8 @@ if __name__ == '__main__':
             count+=1
             # axs[i][branch].plot(frequencies_w, np.abs(frequencies_h)) # 20 * np.log10(np.abs(frequencies_h) + 1e-12) per la magnitudine in dB
             # axs[i][branch].set_title(f'Branch {branch+1} - Feature Map {i+1}')
+    np.save(f'{saved_path_visualization_frequency}/heatmap', heatmap)
+    np.save('heatmap_2b_001_msvt_se_se_net', heatmap)
     plt.figure(tight_layout=True)
     # cmap=sns.color_palette("vlag", as_cmap=True)
     # cmap=sns.color_palette("icefire", as_cmap=True)
@@ -86,9 +88,9 @@ if __name__ == '__main__':
         plt.axhline(y=tmp, c='black')
     ax.set_yticks(y_ticks)
     ax.set_yticklabels(y_ticks)
-    plt.ylabel('Feature Maps', fontsize=20)
-    plt.xlabel('Frequencies', fontsize=20)
-    plt.title('Feature Map Frequencies', fontsize=20)
+    plt.ylabel('Feature Maps', fontsize=22)
+    plt.xlabel('Frequencies (Hz)', fontsize=22)
+    # plt.title('Feature Map Frequencies', fontsize=22)
     plt.tight_layout(pad=0)
     plt.savefig(f'{saved_path_visualization_frequency}/Heatmap', bbox_inches="tight", pad_inches=0.05)
     plt.close()

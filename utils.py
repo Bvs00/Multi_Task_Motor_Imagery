@@ -12,8 +12,9 @@ from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, balanced
 ############ Import Network ############
 from EEGNet import EEGNet
 from PatchEmbeddingNet import PatchEmbeddingNet, PatchEmbeddingNet_Autoencoder, PatchEmbeddingNet_Soft 
-from MSVTNet import MSVTNet, MSVTSENet, MSVT_SE_Net, MSVT_SE_SE_Net
+from MSVTNet import MSVTNet, MSVTSENet, MSVT_SE_Net, MSVT_SE_SE_Net, MSVT_Custom_Net, MSVT_Custom_SE_Net, MSVT_SE_SE_SE_Net
 from CTNet import CTNet, CTNet_Soft, CSETNet, CCBAMTNet
+from EEGConformer import EEGConformer
 ################################################
 import seaborn as sns
 from data_augmentation import chr_augmentation, reverse_channels, segmentation_reconstruction, reverse_channels_segmentation_reconstruction
@@ -40,7 +41,10 @@ available_network = [
     'CCBAMTNet',
     'MSVTSENet',
     'MSVT_SE_Net', 
-    'MSVT_SE_SE_Net'
+    'MSVT_SE_SE_Net', 
+    'MSVT_Custom_Net',
+    'MSVT_Custom_SE_Net', 
+    'MSVT_SE_SE_SE_Net'
 ]
 
 network_factory_methods = {
@@ -48,6 +52,7 @@ network_factory_methods = {
     'PatchEmbeddingNet_Autoencoder': PatchEmbeddingNet_Autoencoder,
     'CTNet': CTNet,
     'EEGNet': EEGNet,
+    'EEGConformer': EEGConformer,
     'PatchEmbeddingNet_Soft': PatchEmbeddingNet_Soft,
     'CTNet_Soft': CTNet_Soft,
     'MSVTNet': MSVTNet,
@@ -55,7 +60,10 @@ network_factory_methods = {
     'CCBAMTNet': CCBAMTNet,
     'MSVTSENet': MSVTSENet,
     'MSVT_SE_Net': MSVT_SE_Net,
-    'MSVT_SE_SE_Net': MSVT_SE_SE_Net
+    'MSVT_SE_SE_Net': MSVT_SE_SE_Net,
+    'MSVT_Custom_Net':MSVT_Custom_Net,
+    'MSVT_Custom_SE_Net':MSVT_Custom_SE_Net, 
+    'MSVT_SE_SE_SE_Net': MSVT_SE_SE_SE_Net
 }
 
 available_augmentation = [
@@ -397,12 +405,12 @@ def find_minum_loss(filename):
     # Stampa il risultato
     return best_fold
 
-def find_max_f1(filename):
+def find_max_bacc(filename):
     with open(filename, "r") as file:
         lines = file.readlines()
 
         # Inizializza variabili per tracciare il fold con la loss più bassa
-    max_f1 = 0.0
+    max_bacc = 0.0
     best_fold = None
 
     # Scorri le linee e cerca i valori di loss
@@ -411,11 +419,11 @@ def find_max_f1(filename):
             # Estrai il numero del fold e la loss
             parts = line.split()
             fold_num = int(parts[1])
-            f1_value = float(parts[6].strip(','))
+            bacc_value = float(parts[15])
 
             # Aggiorna il minimo se la loss corrente è inferiore a quella minima trovata
-            if f1_value > max_f1:
-                max_f1 = f1_value
+            if bacc_value > max_bacc:
+                max_bacc = bacc_value
                 best_fold = fold_num
 
     # Stampa il risultato
@@ -431,8 +439,11 @@ class JointCrossEntropyLoss(nn.Module):
         end_out = out[0]
         branch_out = out[1]
         end_loss = F.nll_loss(end_out, label)
-        branch_loss = [F.nll_loss(out, label).unsqueeze(0) for out in branch_out]
-        branch_loss = torch.cat(branch_loss)
+        if isinstance(branch_out, list):
+            branch_loss = [F.nll_loss(out, label).unsqueeze(0) for out in branch_out]
+            branch_loss = torch.cat(branch_loss)
+        else:
+            branch_loss = F.nll_loss(branch_out, label)
         loss = self.lamd * end_loss + (1 - self.lamd) * torch.sum(branch_loss)
         return loss
 
@@ -512,8 +523,9 @@ def validate_loso(model, val_loader, criterion_tasks, criterion_subjects, alpha,
         f1_tasks = f1_score(all_labels_tasks, all_preds_tasks, average=None)
         accuracy_tasks = accuracy_score(all_labels_tasks, all_preds_tasks)
         balanced_accuracy_tasks = balanced_accuracy_score(all_labels_tasks, all_preds_tasks)
+        kappa_tasks = cohen_kappa_score(all_labels_tasks, all_preds_tasks)
         # conf_matrix = confusion_matrix(all_labels, all_preds)
-    return f1_tasks.tolist(), accuracy_tasks, balanced_accuracy_tasks, all_preds_subjects
+    return f1_tasks.tolist(), accuracy_tasks, balanced_accuracy_tasks, all_preds_subjects, kappa_tasks
 
     
 
@@ -754,7 +766,7 @@ def train_fine_tuning_model(model, fold_performance, train_loader, val_loader, f
             running_loss += loss.detach().item()
 
         # calcolare la loss di validation
-        val_loss, val_f1, val_conf_matrix, val_accuracy, val_balanced_accuracy = validate_fine_tuning(model, val_loader, criterion, device)
+        val_loss, val_f1, val_conf_matrix, val_accuracy, val_balanced_accuracy, _ = validate_fine_tuning(model, val_loader, criterion, device)
 
         # Early Stopping
         if val_loss < best_val_loss:
@@ -827,7 +839,8 @@ def validate_fine_tuning(model, val_loader, criterion, device):
         accuracy = accuracy_score(all_labels, all_preds)
         balanced_accuracy = balanced_accuracy_score(all_labels, all_preds)
         conf_matrix = confusion_matrix(all_labels, all_preds)
-    return avg_loss, f1.tolist(), conf_matrix, accuracy, balanced_accuracy
+        kappa = cohen_kappa_score(all_labels, all_preds)
+    return avg_loss, f1.tolist(), conf_matrix, accuracy, balanced_accuracy, kappa
 
 ############################################ AUTOENCODER ##################################################
 def zero_segments(x, high=400):

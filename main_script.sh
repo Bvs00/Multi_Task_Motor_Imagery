@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$NUM_AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] \
-    || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ] || [ -z "$DATASET" ] || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ]; then
+    || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ] || [ -z "$DATASET" ] || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ] \
+    || [ -z "$REDUCTION" ]; then
     echo "Errore: Devi specificare NET, PRIME, AUG, SAVED_PATH, NORM, BANDPASS, PARADIGM!"
     echo "Utilizzo: NET=<valore> PRIME=<valore> AUG=<valore> ./script.sh"
     exit 1
@@ -23,6 +24,7 @@ echo "$DATASET"
 echo "$MAPS"
 echo "$P1"
 echo "$P2"
+echo "$REDUCTION"
 
 if [ "$PRIME" == "1" ]; then
   primes=(42 71 101 113 127 131 139 149 157 163 173 181 322 521)
@@ -50,19 +52,22 @@ dataset="$DATASET"
 maps="$MAPS"
 p1="$P1"
 p2="$P2"
+reduction="$REDUCTION"
+
+# "/mnt/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/train_${dataset}_$bandpass.npz"
 
 for seed in "${primes[@]}"; do
   echo "Train seed: $seed"
   python -u train_motor_imagery.py --seed "$seed" --name_model "$network" --saved_path "$saved_path" --lr 0.001 \
           --augmentation "$aug" --num_augmentations "$num_aug" --num_workers 5 --normalization "$normalization" \
-          --paradigm "$paradigm" --train_set "/mnt/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/train_${dataset}_$bandpass.npz" \
+          --paradigm "$paradigm" --train_set "/cache/sbove/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/train_${dataset}_$bandpass.npz" \
           --alpha "$alpha" --patience 150 --batch_size 72 --auxiliary_branch "$aux" --feature_maps $maps \
-          --p1 "$p1" --p2 "$p2"
+          --p1 "$p1" --p2 "$p2" --reduction "$reduction"
   echo "Test seed: $seed"
   python -u test_motor_imagery.py --name_model "$network" --saved_path "$saved_path" --paradigm "$paradigm" \
-          --test_set "/mnt/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/test_${dataset}_$bandpass.npz" \
+          --test_set "/cache/sbove/datasets/eeg/Dataset_BCI_${dataset}/Signals_BCI_2classes/test_${dataset}_$bandpass.npz" \
           --seed "$seed" --alpha "$alpha" --auxiliary_branch "$aux" --feature_maps $maps \
-          --p1 "$p1" --p2 "$p2"
+          --p1 "$p1" --p2 "$p2" --reduction "$reduction"
 done
 
 python create_excel_motor_imagery.py --network "$network" --path "$saved_path"

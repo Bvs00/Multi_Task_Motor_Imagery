@@ -2,7 +2,7 @@
 
 if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$NUM_AUG" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] \
     || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ] || [ -z "$DATASET" ] \
-    || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ]; then
+    || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ] || [ -z "$REDUCTION" ]; then
     echo "Errore: Devi specificare NET, PRIME, AUG, SAVED_PATH, NORM, BANDPASS, PARADIGM!"
     echo "Utilizzo: NET=<valore> PRIME=<valore> AUG=<valore> ./script.sh"
     exit 1
@@ -68,6 +68,7 @@ for alpha in "${alpha_values[@]}"; do
     export MAPS="$MAPS"
     export P1="$P1"
     export P2="$P2"
+    export REDUCTION="$REDUCTION"
 
     ./main_script_inbit.sh
 done

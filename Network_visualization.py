@@ -219,13 +219,13 @@ class MSVTSENet(nn.Module):
         else:
             x = self.se_layer(x)
         x = self.rearrange(x)
-        x = self.transformer(x)
-        output_task = self.last_head_task(x)
-        output_subject = self.last_head_subject(x)
+        latent_representation = self.transformer(x)
+        output_task = self.last_head_task(latent_representation)
+        output_subject = self.last_head_subject(latent_representation)
         if self.b_preds:
-            return [[output_task, branch_task], [output_subject, branch_subject], None, se_weights] if return_attention else [[output_task, branch_task], [output_subject, branch_subject]]
+            return [[output_task, branch_task], [output_subject, branch_subject], None, se_weights] if return_attention else [[output_task, branch_task], [output_subject, branch_subject], latent_representation]
         else:
-            return [output_task, output_subject, None, se_weights] if return_attention else [output_task, output_subject]
+            return [output_task, output_subject, None, se_weights] if return_attention else [output_task, output_subject, latent_representation]
 
 
 ################################### MSVT_SE_Net #######################################

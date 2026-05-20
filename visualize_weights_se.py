@@ -103,13 +103,13 @@ def plot_heatmap(matrix_se_weights, path='prova.png', title=''):
     # cmap=sns.color_palette("rocket", as_cmap=True)
     ax = sns.heatmap(matrix_se_weights, vmin=np.min(matrix_se_weights, axis=(0,1)), vmax=np.max(matrix_se_weights, axis=(0,1)), cmap=cmap) # sulle ascisse c'è la prima dimensione mentre sulle ordinate la seconda dimensione #coolwarm
     cbar = ax.collections[0].colorbar
-    cbar.ax.tick_params(labelsize=20)
+    cbar.ax.tick_params(labelsize=22)
     ax.set_ylim(0, matrix_se_weights.shape[0])
-    ax.tick_params(axis='x', labelsize=20)
-    ax.tick_params(axis='y', labelsize=20)
+    ax.tick_params(axis='x', labelsize=22)
+    ax.tick_params(axis='y', labelsize=22)
     
     x_ticks = [0,1,2,3,4,5,6,7,8,9] # 0 = inizio, 34 = fine
-    x_labels = [0,1,2,3,4,5,6,7,8,9] if 'Second' in title else [0,1,2,3,4,5,6,7,8,75] # inserisci 125 al posto di 9 per mantenere la stessa proporzione con la heatmap delle frequenze
+    x_labels = [0,1,2,3,4,5,6,7,8,9]
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, rotation=45)
     
@@ -121,10 +121,9 @@ def plot_heatmap(matrix_se_weights, path='prova.png', title=''):
     for y in [18, 36, 54] if h >70 else [9, 18, 27]:
         plt.axhline(y=y, c='black')
     
-    plt.title(title, fontsize=20)
-    plt.xlabel('Subjects', fontsize=20)
-    if 'Second' in title:
-        plt.ylabel('Feature Maps', fontsize=20)
+    # plt.title(title, fontsize=22)
+    plt.xlabel('Subjects', fontsize=22)
+    plt.ylabel('Feature Maps', fontsize=22)
     plt.tight_layout(pad=0)
     plt.savefig(path, bbox_inches="tight", pad_inches=0.05)
     plt.close()
@@ -133,7 +132,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_set', type=str, default='/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_full.npz')
     parser.add_argument("--name_model", type=str, default='MSVT_SE_SE_Net', help="Name of model that use", choices=available_network)
-    parser.add_argument('--saved_path', type=str, default='Results_2B/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
+    parser.add_argument('--saved_path', type=str, default='Results_2b/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
     parser.add_argument('--saved_path_plot', type=str, default='Visualization_SE_Weights')
     parser.add_argument('--device', type=str, default='cuda:0' if torch.cuda.is_available() else'cpu')
     parser.add_argument('--seed', type=int, default=42)

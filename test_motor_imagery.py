@@ -1,13 +1,24 @@
 import sys
 import os
 from utils import create_tensors, create_tensors_subjects, find_minum_loss, validate, validate_loso, validate_fine_tuning, \
-    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntropyLoss
+    load_normalizations, available_paradigm, available_network, network_factory_methods, JointCrossEntropyLoss, find_max_bacc
 import argparse
 from torch.utils.data import TensorDataset, DataLoader
 import json
 import numpy as np
 import torch
 import torch.nn as nn
+
+def average_state_dicts(state_dicts):
+    avg = {}
+    for k in state_dicts[0].keys():
+        vals = [sd[k] for sd in state_dicts]
+        if vals[0].dtype.is_floating_point:
+            avg[k] = torch.stack(vals, dim=0).mean(dim=0)
+        else:
+            # e.g. BatchNorm num_batches_tracked (int64) -> just copy
+            avg[k] = vals[0].clone()
+    return avg
 
 
 if __name__ == '__main__':
@@ -23,6 +34,9 @@ if __name__ == '__main__':
     parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
     parser.add_argument('--p1', type=int, default=8)
     parser.add_argument('--p2', type=int, default=7)
+    parser.add_argument('--reduction', type=int, default=2)
+    parser.add_argument('-bacc', action='store_true', default=False)
+    parser.add_argument('-avg', action='store_true', default=False)
     args = parser.parse_args()
     
     args.auxiliary_branch = True if args.auxiliary_branch == 'True' else False
@@ -35,7 +49,7 @@ if __name__ == '__main__':
     num_subjects=9
     
     if args.paradigm=='Single':
-        num_subjects=8
+        num_subjects=9
     
     if args.paradigm=='LOSO':
         dir_path, filename = os.path.split(args.test_set)
@@ -64,17 +78,45 @@ if __name__ == '__main__':
         dataset = TensorDataset(data, labels, subjects)
         test_loader = DataLoader(dataset, batch_size=256, num_workers=5)
 
-        best_fold = find_minum_loss(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt')
-        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, 'P1': args.p1, 'P2': args.p2} if 'MS' in args.name_model else {}
-        model = (
-            network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                num_classes=len(np.unique(labels)), subjects=num_subjects,
-                samples=data.shape[3], channels=data.shape[2], **extra_args)
-        )
-        model.to(args.device)
-        model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
+        if args.bacc:
+            print("Find Max F1")
+            best_fold = find_max_bacc(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt')
+        else:
+            best_fold = find_minum_loss(f'{saved_path}/{args.name_model}_seed{args.seed}_validation_log.txt')
+            
+        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, \
+            'P1': args.p1, 'P2': args.p2, 'reduction': args.reduction} if 'MS' in args.name_model else {}
+        
+        if args.avg:
+            paths = [f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold1.pth', 
+                     f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold2.pth',
+                     f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold3.pth',
+                     f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold4.pth',
+                     f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold5.pth']
+            state_dicts = [torch.load(p, map_location=args.device) for p in paths]
 
-        if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" or args.name_model == "MSVT_SE_SE_Net") and (args.auxiliary_branch):
+            avg_sd = average_state_dicts(state_dicts)
+
+            # build same architecture and load
+            model = (
+                network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
+                    num_classes=len(np.unique(labels)), subjects=num_subjects,
+                    samples=data.shape[3], channels=data.shape[2], **extra_args)
+            )
+            model.to(args.device)
+            model.load_state_dict(avg_sd)
+        else:
+            model = (
+                network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
+                    num_classes=len(np.unique(labels)), subjects=num_subjects,
+                    samples=data.shape[3], channels=data.shape[2], **extra_args)
+            )
+            model.to(args.device)
+            model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
+
+        if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" \
+            or args.name_model == "MSVT_SE_SE_Net" or args.name_model == "MSVT_Custom_Net" or args.name_model == "MSVT_SE_SE_SE_Net" \
+                or args.name_model == "MSVT_Custom_SE_Net") and (args.auxiliary_branch):
             criterion_tasks = JointCrossEntropyLoss()
             criterion_subjects = JointCrossEntropyLoss()
         else:
@@ -85,21 +127,23 @@ if __name__ == '__main__':
             (val_f1_tasks, 
             val_accuracy_tasks, 
             val_balanced_accuracy_tasks, 
-            subjects_prediction) = validate_loso(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
+            subjects_prediction, val_kappa_tasks) = validate_loso(model, test_loader, criterion_tasks, criterion_subjects, alpha=args.alpha, device=args.device)
             median_subject_prediciton = np.median(subjects_prediction)
             print(f"The median value of patient {patient+1} is {median_subject_prediciton}")
             f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks), balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
+            kappa_tasks_list.append(val_kappa_tasks)
             final_results.append({'Patient': patient+1, 
                                 'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 'Balanced Accuracy Tasks': val_balanced_accuracy_tasks, 
-                                'Median Subject Prediction': median_subject_prediciton})
+                                'Median Subject Prediction': median_subject_prediciton, 'Kappa Tasks': val_kappa_tasks})
         elif args.paradigm=='Single':
             (val_loss, 
             val_f1_tasks, 
             val_conf_matrix, 
             val_accuracy_tasks, 
-            val_balanced_accuracy_tasks) = validate_fine_tuning(model, test_loader, criterion_tasks, args.device)
+            val_balanced_accuracy_tasks, val_kappa_tasks) = validate_fine_tuning(model, test_loader, criterion_tasks, args.device)
             loss_list.append(val_loss), f1_list_tasks.append(val_f1_tasks), accuracy_list_tasks.append(val_accuracy_tasks)
             balanced_accuracy_list_tasks.append(val_balanced_accuracy_tasks)
+            kappa_tasks_list.append(val_kappa_tasks)
             
             final_results.append({'Patient': patient+1, 'Loss': val_loss, 
                                 'F1 Score Tasks': val_f1_tasks, 'Accuracy Tasks': val_accuracy_tasks, 
@@ -131,7 +175,8 @@ if __name__ == '__main__':
         final_results.append(
             {f"Average": {"Loss": np.mean(loss_list), 
                         "F1 Score Tasks": np.mean(f1_list_tasks, axis=0).tolist(), "Accuracy Tasks": np.mean(accuracy_list_tasks), "Balanced Accuracy Tasks": np.mean(balanced_accuracy_list_tasks),
-                        "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects), }}
+                        "Accuracy Subjects": np.mean(accuracy_list_subjects), "Balanced Accuracy Subjects": np.mean(balanced_accuracy_list_subjects), 
+                        'Kappa Tasks': np.mean(kappa_tasks_list)}}
         )
 
     with open(f'{args.saved_path}/Final_results_{args.name_model}_seed{args.seed}.json', 'w') as f:

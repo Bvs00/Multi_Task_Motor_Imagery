@@ -4,10 +4,12 @@ from Network_visualization import network_factory_methods
 import argparse
 import torch
 from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 import seaborn as sns
+import pandas as pd
 
 def plot_data(data_embedded, y, colors, markers, path, name_file, title):
     if not os.path.exists(f'{args.saved_path_plot}/{path}'):
@@ -20,10 +22,10 @@ def plot_data(data_embedded, y, colors, markers, path, name_file, title):
     plt.figure(figsize=(9, 7), dpi=300)
     
     plt.rcParams.update({
-    "font.size": 14,
+    "font.size": 18,
     "axes.titlesize": 16,
     "axes.labelsize": 15,
-    "legend.fontsize": 13
+    "legend.fontsize": 18
     })
     
     classes = np.unique(y)
@@ -62,28 +64,48 @@ def plot_data(data_embedded, y, colors, markers, path, name_file, title):
     plt.savefig(f'{args.saved_path_plot}/{path}/{name_file}.png', bbox_inches="tight", pad_inches=0.05)
     plt.close()
 
-
+index_seed = {
+    42:0,
+    71:1,
+    101:2,
+    113:3,
+    127:4,
+    131:5,
+    139:6,
+    149:7,
+    157:8,
+    163:9,
+    173:10,
+    181:11,
+    322:12,
+    521:13
+    }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_set", type=str,
-                        default="/mnt/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_full.npz", help="Path to train set file")
+                        default="/cache/sbove/datasets/eeg/Dataset_BCI_2b/Signals_BCI_2classes/test_2b_full.npz", help="Path to train set file")
     parser.add_argument("--name_model", type=str, default='MSVT_SE_SE_Net', help="Name of model that use", choices=available_network)
-    parser.add_argument('--saved_path', type=str, default='Results_2b/Results_Alpha025/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net_Wout_Aux')
-    parser.add_argument('--saved_path_plot', type=str, default='Visualization_TSNE')
+    parser.add_argument('--saved_path', type=str, default='Results_2b/Results_Alpha001/Results_SegRec/Results_Cross/Results_MSVT_SE_SE_Net')
+    parser.add_argument('--saved_path_plot', type=str, default='Visualization_TSNE_001')
     parser.add_argument('--dataset', type=str, default='Dataset_2B')
     parser.add_argument('--device', type=str, default='cuda:0' if torch.cuda.is_available() else'cpu')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--paradigm', type=str, choices=available_paradigm, default='Cross')
-    parser.add_argument('--alpha', type=float, default=0.25)
+    parser.add_argument('--alpha', type=float, default=0.01)
     parser.add_argument('--threshold', type=float, default=0.6)
     parser.add_argument('--auxiliary_branch', type=str, default='False')
     parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
     parser.add_argument('--p1', type=int, default=8)
     parser.add_argument('--p2', type=int, default=7)
+    parser.add_argument('--perplexity', type=int, default=5)
     args = parser.parse_args()
     
     args.auxiliary_branch = True if args.auxiliary_branch == 'True' else False
+    
+    sujbect_performance_path = f'{args.saved_path}/seed_results_{args.name_model}_balanced_subjects.xlsx'
+    dataframe = pd.read_excel(sujbect_performance_path)
+    performance_subject_identification = [round(data,2) for data in dataframe.loc[index_seed[args.seed]][1:]]
     
     data_train_tensors, labels_train_tensors, labels_train_subjects = create_tensors_subjects(args.train_set)
     mean, std, min_, max_ = load_normalizations(f'{args.saved_path}/{args.name_model}')
@@ -104,7 +126,8 @@ if __name__ == '__main__':
         data = (data - min_)/(max_ - min_)
     
     data_reshape = torch.reshape(data, [data.shape[0], -1]).numpy()
-    data_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(data_reshape)
+    data_reshape_pca = PCA(n_components=50).fit_transform(data_reshape)
+    data_embedded = TSNE(n_components=2, random_state=42, perplexity=args.perplexity).fit_transform(data_reshape_pca)
     
     y_subjects = labels_subjects.numpy()
     y_tasks = labels.numpy()
@@ -225,7 +248,8 @@ if __name__ == '__main__':
     latent_representation = (latent_representation-mean_tmp)/std_tmp
     
     latent_representation = latent_representation.cpu().numpy()
-    latent_representation_embedded = TSNE(n_components=2, random_state=42, perplexity=5).fit_transform(latent_representation)
+    latent_representation_pca = PCA(n_components=50).fit_transform(latent_representation)
+    latent_representation_embedded = TSNE(n_components=2, random_state=42, perplexity=args.perplexity).fit_transform(latent_representation_pca)
     plot_data(latent_representation_embedded, y=y_subjects, colors=colors, markers=markers, path=args.dataset, \
         name_file=f'{args.name_model}_Data_Subjects', title='2D Representation of Latent Representation of Original Data grouped for Subjects')
     plot_data(latent_representation_embedded, y=y_tasks, colors=colors, markers=markers, path=args.dataset, \

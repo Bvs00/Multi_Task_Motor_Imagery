@@ -43,7 +43,8 @@ def _train(data, labels, labels_subjects, saved_path):
     # Iterare su ciascun fold
     for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
         fix_seeds(args.seed)
-        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, 'P1': args.p1, 'P2': args.p2} if 'MS' in args.name_model else {}
+        extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, \
+            'P1': args.p1, 'P2': args.p2, 'reduction': args.reduction} if 'MS' in args.name_model else {}
         model = (
             network_factory_methods[args.name_model](
                 model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
@@ -65,7 +66,9 @@ def _train(data, labels, labels_subjects, saved_path):
         # print(f"Class weights for this fold: {class_weights}")
         # print(f"Subjects weights for this fold: {subjects_weights}")
         
-        if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" or args.name_model == "MSVT_SE_SE_Net") and (args.auxiliary_branch):
+        if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" \
+            or args.name_model == "MSVT_SE_SE_Net" or args.name_model == "MSVT_Custom_Net" or args.name_model == "MSVT_SE_SE_SE_Net" \
+                or args.name_model == "MSVT_Custom_SE_Net") and (args.auxiliary_branch):
             criterion_tasks = JointCrossEntropyLoss()
             criterion_subjects = JointCrossEntropyLoss()
         else:
@@ -114,6 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
     parser.add_argument('--p1', type=int, default=8)
     parser.add_argument('--p2', type=int, default=7)
+    parser.add_argument('--reduction', type=int, default=2)
     parser.add_argument('-checkpoint_flag', action='store_true', default=True)
     args = parser.parse_args()
     

@@ -34,11 +34,12 @@ def _train(data, labels, saved_path, saved_path_loso):
     # Iterare su ciascun fold
     for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
         fix_seeds(args.seed)
+        extra_args = {'b_preds': args.auxiliary_branch} if 'MS' in args.name_model else {}
         pretrained_model = (
             network_factory_methods[args.name_model](
                 model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                num_classes=len(np.unique(labels)), subjects=8,
-                samples=data.shape[3], channels=data.shape[2])
+                num_classes=len(np.unique(labels)), subjects=9,
+                samples=data.shape[3], channels=data.shape[2], **extra_args)
         )
         pretrained_model.to(args.device)
         pretrained_model.load_state_dict(torch.load(f'{saved_path_loso}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
@@ -55,7 +56,7 @@ def _train(data, labels, saved_path, saved_path_loso):
         # print(f"Class weights for this fold: {class_weights}")
         # print(f"Subjects weights for this fold: {subjects_weights}")
         
-        if args.name_model == "MSVTNet" or args.name_model == "MSVTSENet":
+        if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" or args.name_model == "MSVT_SE_SE_Net") and (args.auxiliary_branch):
             criterion_tasks = JointCrossEntropyLoss()
         else:
             criterion_tasks = nn.CrossEntropyLoss(weight=class_weights)
@@ -95,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument("--patience", type=int, default=100, help="Numbers of epochs to stop the train")
     parser.add_argument("--batch_size", type=int, default=64, help="Size of the batch")
     parser.add_argument("--name_model", type=str, default='PatchEmbeddingNet', help="Name of tensors that use", choices=available_network)
+    parser.add_argument('--auxiliary_branch', type=str, default='True')
     parser.add_argument('--saved_path_loso', type=str, default='Results_Prova')
     parser.add_argument('--saved_path', type=str, default='Results_Prova')
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate value")
@@ -105,11 +107,15 @@ if __name__ == '__main__':
     parser.add_argument('--normalization', type=str, choices=available_normalization, default='Z_Score_unique')
     parser.add_argument('--linear_probing', type=str, default="False")
     parser.add_argument('-checkpoint_flag', action='store_true', default=True)
+    parser.add_argument('-loso', action='store_true', default=False)
     args = parser.parse_args()
     
     print(f"DEVICE: {args.device}")
     if args.augmentation == "None":
         args.augmentation= None
+    
+    args.auxiliary_branch = True if args.auxiliary_branch == 'True' else False
+    print(f'Auxiliary Branch condition: {args.auxiliary_branch}')
     
     if args.linear_probing == "False":
         args.linear_probing = False
@@ -127,7 +133,7 @@ if __name__ == '__main__':
         if not os.path.exists(args.saved_path+f'/Patient_{patient+1}'):
             os.makedirs(args.saved_path+f'/Patient_{patient+1}')
         saved_path = f'{args.saved_path}/Patient_{patient+1}'
-        saved_path_loso = f'{args.saved_path_loso}/Patient_{patient+1}'
+        saved_path_loso = f'{args.saved_path_loso}/Patient_{patient+1}' if args.loso else f'{args.saved_path_loso}'
         fold_performance = []
         
         _train(data, labels, saved_path, saved_path_loso)
