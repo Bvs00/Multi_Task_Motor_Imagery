@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--feature_maps', nargs='+', type=int, default=[9, 9, 9, 9])
     parser.add_argument('--p1', type=int, default=8)
     parser.add_argument('--p2', type=int, default=7)
+    parser.add_argument('--num_workers', type=int, default=5)
     parser.add_argument('--reduction', type=int, default=2)
     parser.add_argument('-bacc', action='store_true', default=False)
     parser.add_argument('-avg', action='store_true', default=False)
@@ -46,7 +47,13 @@ if __name__ == '__main__':
     loss_list_tasks, f1_list_tasks, accuracy_list_tasks, balanced_accuracy_list_tasks = [], [], [], []
     loss_list_subjects, f1_list_subjects, accuracy_list_subjects, balanced_accuracy_list_subjects = [], [], [], []
     kappa_tasks_list = []
-    num_subjects=9
+    
+    if 'OpenBMI' in args.test_set:
+        num_subjects=54
+    elif 'PhysionetMI' in args.test_set:
+        num_subjects=106
+    else:
+        num_subjects=9
     
     if args.paradigm=='Single':
         num_subjects=9
@@ -56,7 +63,7 @@ if __name__ == '__main__':
         new_filename = filename.replace("test", "train")
         train_set_path = os.path.join(dir_path, new_filename)
         data_train_tensors, labels_train_tensors, subjects_train_tensors = create_tensors_subjects(train_set_path)
-        num_subjects=8
+        num_subjects=num_subjects-1
     
     for patient in range(len(data_test_tensors)):
         data, labels, subjects = data_test_tensors[patient], labels_test_tensors[patient], subjects_test_tensors[patient]
@@ -76,7 +83,7 @@ if __name__ == '__main__':
             data = (data - min_)/(max_ - min_)
 
         dataset = TensorDataset(data, labels, subjects)
-        test_loader = DataLoader(dataset, batch_size=256, num_workers=5)
+        test_loader = DataLoader(dataset, batch_size=256, num_workers=args.num_workers)
 
         if args.bacc:
             print("Find Max F1")
@@ -108,11 +115,11 @@ if __name__ == '__main__':
         else:
             model = (
                 network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                    num_classes=len(np.unique(labels)), subjects=num_subjects,
+                    num_classes=len(np.unique(labels)), subjects=54,
                     samples=data.shape[3], channels=data.shape[2], **extra_args)
             )
             model.to(args.device)
-            model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth'))
+            model.load_state_dict(torch.load(f'{saved_path}/{args.name_model}_seed{args.seed}_best_model_fold{best_fold}.pth', map_location=args.device))
 
         if (args.name_model == "MSVTNet" or args.name_model == "MSVTSENet" or args.name_model == "MSVT_SE_Net" \
             or args.name_model == "MSVT_SE_SE_Net" or args.name_model == "MSVT_Custom_Net" or args.name_model == "MSVT_SE_SE_SE_Net" \

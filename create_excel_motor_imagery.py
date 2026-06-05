@@ -15,14 +15,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     path = args.path
-    f1_score_seeds = {'Patient1':[], 'Patient2':[], 'Patient3':[], 'Patient4':[], 'Patient5':[], 'Patient6':[],
-                                    'Patient7':[], 'Patient8':[], 'Patient9':[], 'Average':[]}
-    dataframe_balanced = pd.DataFrame(columns=['Seed', 'Patient1', 'Patient2', 'Patient3', 'Patient4', 'Patient5', 'Patient6',
-                                    'Patient7', 'Patient8', 'Patient9', 'Average'])
-    dataframe_balanced_subjects = pd.DataFrame(columns=['Seed', 'Patient1', 'Patient2', 'Patient3', 'Patient4', 'Patient5', 'Patient6',
-                                    'Patient7', 'Patient8', 'Patient9', 'Average'])
-    dataframe_kappa = pd.DataFrame(columns=['Seed', 'Patient1', 'Patient2', 'Patient3', 'Patient4', 'Patient5', 'Patient6',
-                                    'Patient7', 'Patient8', 'Patient9', 'Average'])
+    if 'OpenBMI' in path:
+        num_patient = 54
+    elif 'PhysionetMI' in args.test_set:
+        num_patient=106
+    else:
+        num_patient = 9
+    f1_score_seeds = {}
+    for i in range(num_patient):
+        f1_score_seeds[f'Patient{i+1}'] = []
+    f1_score_seeds['Average'] = []
+    
+    columns = ['Seed'] + [f'Patient{i+1}' for i in range(num_patient)] + ['Average']
+    dataframe = pd.DataFrame(columns=columns)
+    dataframe_balanced = pd.DataFrame(columns=columns)
+    dataframe_balanced_subjects = pd.DataFrame(columns=columns)
+    dataframe_kappa = pd.DataFrame(columns=columns)
     list_seeds = [42, 71, 101, 113, 127, 131, 139, 149, 157, 163, 173, 181, 322, 521, 
                   402, 701, 1001, 1013, 1207, 1031, 1339, 1449, 1527, 1613, 1743, 
                   1841, 3222, 5421] if args.full_seeds else [42, 71, 101, 113, 127, 131, 
@@ -34,19 +42,19 @@ if __name__ == "__main__":
 
         with open(file_path, 'r') as f:
             data = json.load(f)
-            balanced_accuracies = [round(data[i]['Balanced Accuracy Tasks'], 4)*100 for i in range(9)]
-            kappa = [round(data[i]['Kappa Tasks'], 3) for i in range(9)]
+            balanced_accuracies = [round(data[i]['Balanced Accuracy Tasks'], 4)*100 for i in range(num_patient)]
+            kappa = [round(data[i]['Kappa Tasks'], 3) for i in range(num_patient)]
             if not args.fine_tuning and not args.loso:
-                balanced_accuracies_subjects = [round(data[i]['Balanced Accuracy Subjects'], 4)*100 for i in range(9)]
+                balanced_accuracies_subjects = [round(data[i]['Balanced Accuracy Subjects'], 4)*100 for i in range(num_patient)]
             
-            for i in range(9):
+            for i in range(num_patient):
                 key = f'Patient{i+1}'
                 f1_val_arr = [round(x, 4) for x in data[i]['F1 Score Tasks']]
                 if f1_score_seeds[key]:
                     f1_score_seeds[key] = [a+b for a,b in zip(f1_score_seeds[key], f1_val_arr)]
                 else:
                     f1_score_seeds[key] = f1_val_arr
-            f1_val_arr = [round(x, 4) for x in data[9]['Average']['F1 Score Tasks']]
+            f1_val_arr = [round(x, 4) for x in data[num_patient]['Average']['F1 Score Tasks']]
             if f1_score_seeds['Average']:
                 f1_score_seeds['Average'] = [a+b for a,b in zip(f1_score_seeds['Average'], f1_val_arr)]
             else:
@@ -63,7 +71,7 @@ if __name__ == "__main__":
             dataframe_balanced_subjects['Seed'] = dataframe_balanced_subjects['Seed'].astype('int32')
     
     tmp_acc_list, tmp_bal_acc_list, tmp_bal_acc_sub_list, tmp_kappa_list = [], [], [], []
-    for i in range(9):
+    for i in range(num_patient):
         key = f'Patient{i+1}'
         f1_score_seeds[key] = [round(x / len(list_seeds), 4)*100 for x in f1_score_seeds[key]]
         tmp_bal_acc_list.append(round(dataframe_balanced[key].mean(), 2))
@@ -78,9 +86,9 @@ if __name__ == "__main__":
         dataframe_balanced_subjects.loc[len(list_seeds)] = ['Average'] + tmp_bal_acc_sub_list + [round(np.mean(tmp_bal_acc_sub_list), 4)]
     
     # Salvare il DataFrame in un file CSV
-    dataframe_balanced.to_excel(f'{path}/seed_results_{args.network}_balanced.xlsx', index=False)
-    dataframe_kappa.to_excel(f'{path}/seed_results_{args.network}_kappa.xlsx', index=False)
+    dataframe_balanced.to_excel(f'{path}/A_seed_results_{args.network}_balanced.xlsx', index=False)
+    dataframe_kappa.to_excel(f'{path}/A_seed_results_{args.network}_kappa.xlsx', index=False)
     if not args.fine_tuning and not args.loso:
-        dataframe_balanced_subjects.to_excel(f'{path}/seed_results_{args.network}_balanced_subjects.xlsx', index=False)
-    with open(f"{path}/seed_results_{args.network}_f1_score.json", 'w') as f:
-        json.dump(f1_score_seeds, f, indent=1)
+        dataframe_balanced_subjects.to_excel(f'{path}/A_seed_results_{args.network}_balanced_subjects.xlsx', index=False)
+    with open(f"{path}/A_seed_results_{args.network}_f1_score.json", 'w') as f:
+        json.dump(f1_score_seeds, f, indent=4)
