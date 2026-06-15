@@ -1,18 +1,18 @@
 #!/bin/bash
-#SBATCH --partition=gpuq
+#SBATCH --partition=aiq
 #SBATCH --ntasks=1
 #SBATCH --account=ric_biomore_369
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=14
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --job-name=phy_msvt_se_se_net_01_3
-#SBATCH --output=phy_msvt_se_se_net_01_3.log
+#SBATCH --job-name=openbmi_msvt_se_se_net_0001_3channels_4
+#SBATCH --output=openbmi_msvt_se_se_net_0001_3channels_4.log
 
 
 # ric_biomore_369
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
-num_workers=32
+num_workers=14
 
 if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$NUM_AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] \
     || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ] || [ -z "$DATASET" ] || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ] \
