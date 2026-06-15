@@ -115,7 +115,7 @@ if __name__ == '__main__':
         else:
             model = (
                 network_factory_methods[args.name_model](model_name_prefix=f'{saved_path}/{args.name_model}_seed{args.seed}',
-                    num_classes=len(np.unique(labels)), subjects=54,
+                    num_classes=len(np.unique(labels)), subjects=num_subjects,
                     samples=data.shape[3], channels=data.shape[2], **extra_args)
             )
             model.to(args.device)

@@ -17,7 +17,7 @@ if __name__ == "__main__":
     path = args.path
     if 'OpenBMI' in path:
         num_patient = 54
-    elif 'PhysionetMI' in args.test_set:
+    elif 'PhysionetMI' in path:
         num_patient=106
     else:
         num_patient = 9

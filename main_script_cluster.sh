@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --partition=gpuq
 #SBATCH --ntasks=1
-#SBATCH --account=lm_foggia
+#SBATCH --account=ric_biomore_369
 #SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --job-name=msvt_se_se_net_00001_2_filtered
-#SBATCH --output=msvt_se_se_net_00001_2_filtered.log
-#SBATCH --dependency=504175
+#SBATCH --job-name=phy_msvt_se_se_net_01_3
+#SBATCH --output=phy_msvt_se_se_net_01_3.log
+
 
 # ric_biomore_369
 export TORCH_DEVICE=cuda
@@ -62,6 +62,10 @@ elif [ "$PRIME" == "9" ]; then
   primes=(139)
 elif [ "$PRIME" == "10" ]; then
   primes=(521)
+elif [ "$PRIME" == "11" ]; then
+  primes=(101)
+elif [ "$PRIME" == "12" ]; then
+  primes=(163)
 fi
 
 echo "${primes[@]}"

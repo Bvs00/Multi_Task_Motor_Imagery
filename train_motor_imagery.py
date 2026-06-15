@@ -8,7 +8,7 @@ import json
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import TensorDataset, Subset
 import os
 from sklearn.utils import compute_class_weight
@@ -38,10 +38,11 @@ def _train(data, labels, labels_subjects, saved_path):
     
     fold_performance = []
     dataset = TensorDataset(data, labels, labels_subjects)
-    kfold = KFold(n_splits=args.fold, shuffle=True, random_state=42)
-
+    kfold = StratifiedKFold(n_splits=args.fold, shuffle=True, random_state=42)
+    labels_stratified = np.array([f'{y}_{s}' for y,s in zip(labels, labels_subjects)])
+    
     # Iterare su ciascun fold
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(dataset)):
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(np.zeros(len(labels_stratified)), labels_stratified)):
         fix_seeds(args.seed)
         extra_args = {'b_preds': args.auxiliary_branch, 'F': args.feature_maps, \
             'P1': args.p1, 'P2': args.p2, 'reduction': args.reduction} if 'MS' in args.name_model else {}
