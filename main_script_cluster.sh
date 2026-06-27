@@ -1,18 +1,21 @@
 #!/bin/bash
-#SBATCH --partition=aiq
+#SBATCH --partition=gpuq
 #SBATCH --ntasks=1
 #SBATCH --account=ric_biomore_369
-#SBATCH --cpus-per-task=14
+#SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-task=1
 #SBATCH --time=07:00:00
-#SBATCH --job-name=openbmi_msvt_se_se_net_0001_3channels_4
-#SBATCH --output=openbmi_msvt_se_se_net_0001_3channels_4.log
+#SBATCH --job-name=openbmi_msvt_se_se_net_01_3
+#SBATCH --output=openbmi_msvt_se_se_net_01_3.log
+#SBATCH --nodelist=gnode13
+#SBATCH --dependency=512798
+
 
 
 # ric_biomore_369
 export TORCH_DEVICE=cuda
 export PYTHON=/home/bvosmn000/.conda/envs/ICareMeEnv/bin/python
-num_workers=14
+num_workers=32
 
 if [ -z "$NET" ] || [ -z "$PRIME" ] || [ -z "$AUG" ] || [ -z "$NUM_AUG" ] || [ -z "$SAVED_PATH" ] || [ -z "$NORM" ] || [ -z "$BANDPASS" ] \
     || [ -z "$PARADIGM" ] || [ -z "$ALPHA" ] || [ -z "$AUX" ] || [ -z "$DATASET" ] || [ -z "$MAPS" ] || [ -z "$P1" ] || [ -z "$P2" ] \
@@ -46,14 +49,18 @@ elif [ "$PRIME" == "2" ]; then
   primes=(402 701 1001 1013 1207 1031 1339 1449 1527 1613 1743 1841 3222 5421)
 elif [ "$PRIME" == "3" ]; then
   # primes=(42 71 101 113 127 131 139)
-  primes=(42 71 101 113)
+  # primes=(42 71 101 113)
+  primes=(101 113)
 elif [ "$PRIME" == "4" ]; then
   # primes=(149 157 163 173 181 322 521)
-  primes=(149 157 163 173)
+  # primes=(149 157 163 173)
+  primes=(163 173)
 elif [ "$PRIME" == "5" ]; then
-  primes=(127 131 139)
+  # primes=(127 131 139)
+  primes=(139)
 elif [ "$PRIME" == "6" ]; then
-  primes=(181 322 521)
+  # primes=(181 322 521)
+  primes=(521)
 elif [ "$PRIME" == "7" ]; then
   primes=(113)
 elif [ "$PRIME" == "8" ]; then
